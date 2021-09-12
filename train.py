@@ -1,14 +1,13 @@
 # reduced hamiltonian (q(1), -nabla g(q(1))) -> (q(0), p(0)) -> h(q(0), p(0)) = L to minimize
 # Use backward dynamics: f = (-h_p, h_q)
-
-import torch
 import numpy as np
 
-from common_nets import Mlp
-from model_nets import HDNet
-from utils import generate_coords
+import torch
 from torchdiffeq import odeint_adjoint as odeint
 
+from common.common_nets import Mlp
+from common.utils import generate_coords
+from model_nets import HDNet
 
 def train(h_layer_dims=[], num_samples=1024, batch_size=32, num_epoch=20, 
           lr=1e-3, log_interval=50):
