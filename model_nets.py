@@ -17,5 +17,4 @@ class HDNet(nn.Module):
             dH = torch.autograd.grad(H.sum(), q_p, create_graph=True)[0]
             dq, dp = torch.chunk(dH, 2, dim=1)
             # Use backward dynamics: f = (-h_p, h_q)
-            
             return torch.cat((-dp, dq), dim=1)

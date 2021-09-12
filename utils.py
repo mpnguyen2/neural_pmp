@@ -35,7 +35,7 @@ def isoperi_reward(xk, yk, z, xg, yg):
 # compute nabla -g(q). Wish to minimize g
 def grad_isoperi_reward(xk, yk, z, xg, yg):
     # Basis
-    B = np.eye(z.shape[0]*z.shape[1]); eps = 1e-4
+    B = np.eye(z.shape[0]*z.shape[1]); eps = 1e-5
     ret = np.zeros(z.shape[0]*z.shape[1])
     # Numerically estimate gradient of reward function
     for i in range(len(ret)):
@@ -44,15 +44,24 @@ def grad_isoperi_reward(xk, yk, z, xg, yg):
     
     return ret
 
-def generate_coords(dim=16, batch_size=32, xk=None, yk=None, xg=None, yg=None):
+def generate_coords(dim=16, num_samples=1024, xk=None, yk=None, xg=None, yg=None, total_random=True):
     if xk is None:
         xk, yk = np.mgrid[-1:1:4j, -1:1:4j]
     if xg is None:
         xg, yg = np.mgrid[-1:1:50j, -1:1:50j]
-    q = np.random.rand(batch_size, dim) - .5
-    p = np.zeros((batch_size, dim))
+    if total_random:
+        # Totally random
+        q = np.random.rand(num_samples, dim) 
+    else:
+        # Random with zero padding
+        width = int(np.sqrt(dim))
+        q = np.zeros((num_samples, width, width)) 
+        q[:, 1:(width-1), :(width-1)] = np.random.rand(num_samples, width-2, width-1)
+        q = q.reshape(num_samples, -1)
+    q -= .5
+    p = np.zeros((num_samples, dim))
     
-    for i in range(batch_size):
+    for i in range(num_samples):
         p[i] = grad_isoperi_reward(xk, yk, q[i].reshape(4, 4), xg, yg)
     
     return torch.cat((torch.tensor(q, dtype=torch.float), torch.tensor(p, dtype=torch.float)), dim=1)        
