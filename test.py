@@ -1,22 +1,68 @@
 import numpy as np
-import cv2
 
 import torch
 from torchdiffeq import odeint_adjoint as odeint
 
 from common.common_nets import Mlp
-from common.utils import generate_coords, spline_interp, isoperi_reward_from_img
-
 from model_nets import HDNet
+from envs.classical_controls import ContinuousEnv, MountainCar, Pendulum, CartPole
 
+
+def test(env, AdjointNet, Hnet, model_name, log_interval=2e3):
+    AdjointNet.load_state_dict(torch.load('models/adjoint_' + model_name + '.pth'))
+    Hnet.load_state_dict(torch.load('models/hamiltonian_dynamics_' + model_name + '.pth'))
+    HDnet = HDNet(Hnet=Hnet)
+    q = torch.tensor(env.sample_q(1), dtype=torch.float)
+    p = AdjointNet(q)
+    qp = torch.cat((q, p), axis=1)
+    time_steps = list(np.arange(0, 1, 1e-5))
+    traj = odeint(HDnet, qp, torch.tensor(time_steps, requires_grad=True))
+    
+    cnt = 0
+    for e in traj:
+        qe, _ = torch.chunk(e, 2, dim=1)
+        qe_np = qe.detach().numpy()
+        if cnt % log_interval == 0:
+            print('Current g-value: {}'.format(env.g(qe_np)[0]))
+        cnt += 1
+
+
+test_mt, test_pendulum, test_cart = False, False, True
+
+if test_mt:
+    #Test: Mountain Car
+    q_dim = 2; u_dim = 1
+    env = MountainCar()
+    # Net architectures
+    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
+    h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
+    
+    test(env, adj_net, h_net, model_name='mountain_car')
+
+if test_pendulum:
+    #Test: Pendulum
+    q_dim = 2; u_dim = 1
+    env = Pendulum()
+    # Net architectures
+    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
+    h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
+    
+    test(env, adj_net, h_net, model_name='pendulum')
+    
+if test_cart:
+    #Test: Cartpole
+    q_dim = 4; u_dim = 1
+    env = CartPole()
+    # Net architectures
+    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[16, 32, 32])
+    h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[16, 32, 64, 8])
+    
+    test(env, adj_net, h_net, model_name='cartpole')
+    
+'''
 def test(h_layer_dims, model_path='models/hd.pth', out_file='videos/test8.wmv', 
          num_step=10, log_interval=1000):
     
-    
-    
-    
-    
-'''
 # Setup fixed knots and grids
     xk, yk = np.mgrid[-1:1:4j, -1:1:4j]
     xg, yg = np.mgrid[-1:1:50j, -1:1:50j]

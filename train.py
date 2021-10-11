@@ -54,7 +54,7 @@ if train_cart:
     q_samples = torch.tensor(env.sample_q(num_examples), dtype=torch.float)
     
     # Net architectures
-    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims = [16, 32, 32])
+    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[16, 32, 32])
     h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[16, 32, 64, 8])
     
     train_phase_1(env, adj_net, h_net, qs=q_samples, 
