@@ -11,7 +11,13 @@ from model_nets import HDNet
 
 def test(h_layer_dims, model_path='models/hd.pth', out_file='videos/test8.wmv', 
          num_step=10, log_interval=1000):
-    # Setup fixed knots and grids
+    
+    
+    
+    
+    
+'''
+# Setup fixed knots and grids
     xk, yk = np.mgrid[-1:1:4j, -1:1:4j]
     xg, yg = np.mgrid[-1:1:50j, -1:1:50j]
     # Setup video writer
@@ -37,5 +43,4 @@ def test(h_layer_dims, model_path='models/hd.pth', out_file='videos/test8.wmv',
     
     # Release video
     out.release()
-    
-test(h_layer_dims=[64, 16, 32, 8, 16, 2], num_step=40000)
+'''
