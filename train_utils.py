@@ -8,7 +8,7 @@ from model_nets import HDNet
 from envs.classical_controls import ContinuousEnv
 
 def train_phase_1(env, AdjointNet, Hnet, qs, 
-                  T1 = 0.05, dynamic_hidden=False, alpha = 1, 
+                  T1 = 1.0, dynamic_hidden=False, alpha = 1, 
                   batch_size=32, num_epoch=20, lr=1e-3, 
                   log_interval=50, model_name=''):
     # HDnet calculate the Hamiltonian dynamics network given the Hamiltonian network Hnet
@@ -43,14 +43,14 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
             qt, pt = torch.chunk(qp_t, 2, dim=1)
             qt_np = qt.detach().numpy()
             #print('qt', qt.shape)
-            ## Loss function = (pt + nabla g(qt))**2 + alpha * (h(q, p) - ((p, f(q, u)) - L(q, u))
-            ## First part require nabla g(qt): (pt + nabla g(qt))**2
+            ## Loss function = (pt - nabla g(qt))**2 + alpha * (h(q, p) - ((p, f(q, u)) + L(q, u))
+            ## First part require nabla g(qt): (pt - nabla g(qt))**2
             dg = torch.tensor(env.nabla_g(qt_np))
             #print('nabla g', dg.shape)
-            loss = torch.sum((pt+dg)**2) 
+            loss = torch.sum((pt-dg)**2) 
             ## Second part of loss function
-            # Calculate optimal u = p^T f_u(q, u) (based on adjoint)
-            u = np.einsum('ijk,ij->ik', env.f_u(q_np), p_np)
+            # Calculate optimal u = -p^T f_u(q, u) (based on adjoint)
+            u = np.einsum('ijk,ij->ik', env.f_u(q_np), -p_np)
             #print('u', u.shape)
             if dynamic_hidden:
                 ## (p, f(q, u)) - L(q, u) = (p, qdot_np) - L(q, u)
@@ -60,9 +60,9 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
                 #print('qdot, pdot', qdot.shape, pdot.shape)
                 qdot_np = qdot.detach().numpy()
                 # Calculate reference reduced Hamiltonian using usual Hamiltonian but with supposedly optimal control
-                h_pq_ref = np.einsum('ik,ik->i', p_np, qdot_np) - env.L(q_np, u)
+                h_pq_ref = np.einsum('ik,ik->i', p_np, qdot_np) + env.L(q_np, u)
             else:
-                h_pq_ref = np.einsum('ik,ik->i', p_np, env.f(q_np, u)) - env.L(q_np, u)
+                h_pq_ref = np.einsum('ik,ik->i', p_np, env.f(q_np, u)) + env.L(q_np, u)
             #print('h_pq_ref', h_pq_ref.shape)
             h_pq = Hnet(qp)
             #print('h_pq', h_pq.shape)
