@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+#import torch.nn.functional as F
 
 class Mlp(nn.Module):
     """
@@ -91,3 +91,34 @@ class CNNDecoder(nn.Module):
     
     def forward(self, x):
         return self.net(x)
+    
+class Encoder(nn.Module):
+    """
+    A multilayer perceptron encoder that map 1D tensor to two mean and (diagonal) log-variance 1D tensors 
+    Args:
+        channels (List[int]): list of number of channels to be applied starting with original number of channels of 3D tensor input
+        activation (str): type of activations. 
+    """
+    def __init__(self, input_dim, output_dim, share_layer_dims=[], 
+                 mean_layer_dims=[], logvar_layer_dims=[], activation='tanh'):
+        super(Encoder, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.activation = activation
+        # intermediate dimension
+        idim = share_layer_dims[-1]
+        self.share_mlp = Mlp(input_dim=input_dim, layer_dims=share_layer_dims[:-1], output_dim=idim)
+        self.mean_mlp = Mlp(input_dim=idim, layer_dims=mean_layer_dims, output_dim=output_dim)
+        self.logvar_mlp = Mlp(input_dim=idim, layer_dims=logvar_layer_dims, output_dim=output_dim)
+    
+    def forward(self, x):
+        # common output head
+        com_head = self.share_mlp(x)
+        if self.activation == 'tanh':
+            com_head = torch.tanh(com_head)
+        elif self.activation == 'relu':
+            com_head = torch.relu(com_head)
+        mu = self.mean_mlp(com_head)
+        logvar = self.logvar_mlp(com_head)
+        
+        return mu, logvar

@@ -46,7 +46,7 @@ class ContinuousEnv():
         return ret
     
     # Sampling state q
-    def sample_q(self, num_examples):
+    def sample_q(self, num_examples, mode='train'):
         return np.zeros((num_examples, self.q_dim))
     
     # Image rendering
@@ -92,12 +92,12 @@ class MountainCar(ContinuousEnv):
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train': 
-            a = 0.01
+            a = 0.1
         else:
-            a = 1
+            a = 0.01
         return a*np.concatenate(
-            (np.random.uniform(high=self.max_position/2, low=self.min_position/2, size=(num_examples, 1)),
-            np.random.uniform(high=self.max_speed/2, low=-self.max_speed/2, size=(num_examples, 1))),
+            (np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
+            np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
             axis=1)
     
     def _height(self, xs):
@@ -211,16 +211,19 @@ class CartPole(ContinuousEnv):
         
         
     def L(self, q, u):
-        return 0.5*(u**2) + (q[:, 0] - self.x_threshold/2)**2 + (q[:, 2] - self.theta_threshold_radians/2)**2
+        return 0.5*(u**2) + q[:, 1]**2
     
     def g(self, q):
-        return (q[:, 0] - self.x_threshold/2)**2 + (q[:, 2] - self.theta_threshold_radians/2)**2
+        #noise = np.random.normal(scale=0.001, size=(q.shape[0]))
+        #t = [self.x_threshold/2, self.theta_threshold_radians/2]
+        #a = 0.005
+        return (q[:, 2]/self.theta_threshold_radians)**2 #(a**2-q[:, 0]**2)
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train':
             a = 0.01
         else:
-            a = 0.2
+            a = 0.05
         return np.random.uniform(low=-a, high=a, size=(num_examples, 4))
     
     def render(self, q, mode="rgb_array"):
@@ -311,29 +314,20 @@ class Pendulum(ContinuousEnv):
     
     def L(self, q, u):
         u = np.clip(u, -self.max_torque, self.max_torque)
-        return 0.5*u[:, 0]**2
+        return u[:, 0]**2 + self.g(q)
     
     def g(self, q):
-        return angle_normalize(q[:, 0])**2 + 0.1*q[:, 1]**2
+        return 10*angle_normalize(q[:, 0])**2 + q[:, 1]**2 
     
     def sample_q(self, num_examples, mode='train'):
         if mode=='train':
-            a = 0.1
-            if np.random.rand() < 0.5:
-                return np.concatenate(
-                    (np.random.uniform(high=np.pi, low=(1-a)*np.pi, size=(num_examples, 1)),
-                    np.random.uniform(high=a, low=-a, size=(num_examples, 1))),
-                    axis=1)
-            else:
-                return np.concatenate(
-                    (np.random.uniform(high=-(1-a)*np.pi, low=-np.pi, size=(num_examples, 1)),
-                    np.random.uniform(high=a, low=-a, size=(num_examples, 1))),
-                    axis=1)
+            a = 1
         else:
-            return np.concatenate(
-                    (np.random.uniform(high=np.pi, low=-np.pi, size=(num_examples, 1)),
-                    np.random.uniform(high=1, low=-1, size=(num_examples, 1))),
-                    axis=1)
+            a = 1
+        return a*np.concatenate(
+                (np.random.uniform(high=np.pi, low=-np.pi, size=(num_examples, 1)),
+                np.random.uniform(high=1, low=-1, size=(num_examples, 1))),
+                axis=1)
         
     def render(self, q, mode="rgb_array"):
         if self.viewer is None:
@@ -355,6 +349,6 @@ class Pendulum(ContinuousEnv):
             #self.img.add_attr(self.imgtrans)
 
         self.viewer.add_onetime(self.img)
-        self.pole_transform.set_rotation(q[0] + np.pi / 2)
+        self.pole_transform.set_rotation(q[0]+np.pi/2)
 
         return self.viewer.render(return_rgb_array=mode == "rgb_array")

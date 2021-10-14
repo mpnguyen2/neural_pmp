@@ -4,7 +4,7 @@ import cv2
 import torch
 
 # Spline interpolation for 2D density problem
-def spline_interp(xk, yk, z, xg, yg):
+def spline_interp(z, xk, yk, xg, yg):
     # Interpolate knots with bicubic spline
     tck = interpolate.bisplrep(xk, yk, z)
     # Evaluate bicubic spline on (fixed) grid
