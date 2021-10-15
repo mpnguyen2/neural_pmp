@@ -12,7 +12,8 @@ def kl_loss(mu, logvar):
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1), dim=0)
 
 def train_phase_1(env, AdjointNet, Hnet, qs, 
-                  T1 = 1.0, scale=0.5, dynamic_hidden=False, alpha = 1, 
+                  T1 = 1.0, control_coef=0.5, dynamic_hidden=False, 
+                  alpha1=1, alpha2=0.1, beta=1, 
                   batch_size=32, num_epoch=20, lr=1e-3, 
                   log_interval=50, model_name=''):
     # HDnet calculate the Hamiltonian dynamics network given the Hamiltonian network Hnet
@@ -44,18 +45,19 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
             #print('qp', qp.shape)
             # Given the starting generalized coordinate, use reduced hamiltonian to get 
             # the ending generalized coordinate
-            qp_t = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))[0]
+            qp_t = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))[-1]
             qt, pt = torch.chunk(qp_t, 2, dim=1)
             qt_np = qt.detach().numpy()
             #print('qt', qt.shape)
             ## Loss function = (pt - nabla g(qt))**2 + alpha * (h(q, p) - ((p, f(q, u)) + L(q, u))
             ## First part require nabla g(qt): (pt - nabla g(qt))**2
             dg = torch.tensor(env.nabla_g(qt_np))
+            dg0 = torch.tensor(env.nabla_g(q_np))
             #print('nabla g', dg.shape)
-            loss = torch.sum((pt-dg)**2) 
+            loss = alpha1*torch.sum((p-dg0)**2) + alpha2*torch.sum((pt-dg)**2)
             ## Second part of loss function
             # Calculate optimal u = -p^T f_u(q, u) (based on adjoint)
-            u = (1.0/(2*scale))*np.einsum('ijk,ij->ik', env.f_u(q_np), -p_np)
+            u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(q_np), -p_np)
             #print('u', u.shape)
             if dynamic_hidden:
                 ## (p, f(q, u)) + L(q, u) = (p, qdot_np) + L(q, u)
@@ -71,7 +73,7 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
             #print('h_pq_ref', h_pq_ref.shape)
             h_pq = Hnet(qp)
             #print('h_pq', h_pq.shape)
-            loss += alpha*torch.sum((h_pq-torch.tensor(h_pq_ref))**2)
+            loss += beta*torch.sum((h_pq-torch.tensor(h_pq_ref))**2)
             # optimize step
             loss.backward()
             optim.step(); optim.zero_grad()

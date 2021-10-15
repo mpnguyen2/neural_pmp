@@ -45,8 +45,7 @@ class HDVAE(nn.Module):
         self.T = T
         self.AdjointNet = AdjointNet
         self.HDnet = HDNet(HNet)
-        self.HDInversenet = HDInverseNet(HNet)
-        self.HNetDecoder = HnetDecoder
+        self.HDInversenet = HDInverseNet(HnetDecoder)
         self.z_encoder = z_encoder
         self.z_decoder = z_decoder
     
@@ -66,7 +65,7 @@ class HDVAE(nn.Module):
         mu, logvar = self.z_encoder(qpt)
         zhat = self.reparameterize(mu, logvar)
         qpt_hat = self.z_decoder(zhat)
-        qp_hat = odeint(self.HDInversenet, qpt_hat, torch.tensor(times, requires_grad=True))[0]
+        qp_hat = odeint(self.HDInversenet, qpt_hat, torch.tensor(times, requires_grad=True))[-1]
         
         return qp, qp_hat, qpt, qpt_hat, mu, logvar
         

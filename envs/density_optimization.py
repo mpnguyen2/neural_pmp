@@ -36,9 +36,9 @@ class DensityOpt(ContinuousEnv):
         
     def sample_q(self, num_examples, mode='train'):
         if mode=='train':
-            return generate_coords(num_samples=num_examples, total_random=False, r1=3, r2=6)
+            return generate_coords(num_samples=num_examples, total_random=False, r1=3, r2=7)
         else:
-            return generate_coords(num_samples=num_examples, total_random=True, r1 = 2, r2 = 9)
+            return generate_coords(num_samples=num_examples, total_random=True, r1=6, r2=8)
         
     def render(self, q, mode="rgb_array"):
         xk, yk, xg, yg = self.xk, self.yk, self.xg, self.yg

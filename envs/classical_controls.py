@@ -6,7 +6,7 @@ import math
 from gym.utils import seeding
 from os import path
 
-### Generic continuous environment for reduced Hamiltonian dynamics training
+### Generic continuous environment for reduced Hamiltonian dynamics framework
 class ContinuousEnv():
     def __init__(self, q_dim=1, u_dim=1):
         self.q_dim = q_dim
@@ -92,9 +92,9 @@ class MountainCar(ContinuousEnv):
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train': 
-            a = 0.1
+            a = 1
         else:
-            a = 0.01
+            a = 0.1
         return a*np.concatenate(
             (np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
             np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
@@ -317,13 +317,13 @@ class Pendulum(ContinuousEnv):
         return u[:, 0]**2 + self.g(q)
     
     def g(self, q):
-        return 10*angle_normalize(q[:, 0])**2 + q[:, 1]**2 
+        return (angle_normalize(q[:, 0])+np.pi/2)**2
     
     def sample_q(self, num_examples, mode='train'):
         if mode=='train':
-            a = 1
+            a = 0.1
         else:
-            a = 1
+            a = 0.01
         return a*np.concatenate(
                 (np.random.uniform(high=np.pi, low=-np.pi, size=(num_examples, 1)),
                 np.random.uniform(high=1, low=-1, size=(num_examples, 1))),
