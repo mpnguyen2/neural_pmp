@@ -3,12 +3,12 @@ Pontryagin maximum principle based neural ODE net for handling optimal control p
 
 A few examples in finite-dimensional setting:
 
-* Cartpole:
-![Cartpole](videos/gif/test_cartpole.gif)
+* Cartpole:\
+<img src="videos/gif/test_cartpole.gif" width="300" height="300"/>
 
-* Mountain car:
-![Mountain Car](videos/gif/test_mountain_car.gif)
+* Mountain car:\
+<img src="videos/gif/test_mountain_car.gif" width="300" height="300"/>
 
 Infinite-dimensional case:
-* 2D density map:
-![2D density optimization](videos/gif/test_shape_opt.gif)
+* 2D density map:\
+<img src="videos/gif/test_shape_opt.gif" width="300" height="300"/>
