@@ -14,7 +14,7 @@ b = torch.tensor([[1, 0, 2], [2, 1, 0]])
 
 c = torch.einsum('ij, ij->i', a, b)
 #print(c.shape)
-
+'''
 env = Pendulum()
 
 # models
@@ -41,3 +41,16 @@ for e in traj:
     cnt += 1
 
 env.close()
+'''
+q_dim=2; model_name='mountain_car'
+adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
+h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
+adj_net.load_state_dict(torch.load('models/' + model_name + '/adjoint.pth'))
+h_net.load_state_dict(torch.load('models/' + model_name + '/hamiltonian_dynamics.pth'))
+print('Adjoint net...')
+for param in adj_net.parameters():
+    print(param.data)
+
+print('H net...')
+for param in h_net.parameters():
+    print(param.data)
