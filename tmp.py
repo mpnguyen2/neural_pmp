@@ -42,6 +42,8 @@ for e in traj:
 
 env.close()
 '''
+
+'''
 q_dim=2; model_name='mountain_car'
 adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
 h_net = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
@@ -54,3 +56,15 @@ for param in adj_net.parameters():
 print('H net...')
 for param in h_net.parameters():
     print(param.data)
+'''
+
+import pandas as pd
+
+data = {'name': ['1a', '2b', '3c'],
+        'price': [[0, 1, 2], [2, 3, 5], [3, 6, 8]],
+        'isLocked':[True, False, False]}
+
+df = pd.DataFrame(data, columns=['name', 'price', 'isLocked'])
+df.to_csv('models/test_csv.csv', index=False, header=True)
+df1 = pd.read_csv('models/test_csv.csv')
+print(list(df1[df1['name']=='1a']['price'].values[0]))

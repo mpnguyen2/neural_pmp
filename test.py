@@ -9,7 +9,9 @@ from model_nets import HDNet
 from envs.classical_controls import MountainCar, Pendulum, CartPole
 from envs.density_optimization import DensityOpt
 
-def run_traj(env, AdjointNet, Hnet, model_name, time_steps=list(np.arange(0, 1, 0.1)),
+from train_utils import get_environment, get_architectures
+
+def run_traj(env, AdjointNet, Hnet, HnetDecoder, env_name, time_steps=list(np.arange(0, 1, 0.1)),
              out_video='videos/test.wmv', test_trained=True, phase2=False, log_interval=1, 
              env_close=True, isColor=True):
     # Setup video writer
@@ -18,13 +20,16 @@ def run_traj(env, AdjointNet, Hnet, model_name, time_steps=list(np.arange(0, 1, 
     
     # Load models
     if test_trained:
-        AdjointNet.load_state_dict(torch.load('models/' + model_name + '/adjoint.pth'))
+        AdjointNet.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
         if phase2:
-            Hnet.load_state_dict(torch.load('models/' + model_name + '/hamiltonian_decoder.pth'))
+            HnetDecoder.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_decoder.pth'))
         else:
-            Hnet.load_state_dict(torch.load('models/' + model_name + '/hamiltonian_dynamics.pth'))
+            Hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
     # Build symplectic dynamics net from Hamiltonian net
-    HDnet = HDNet(Hnet=Hnet)
+    if phase2:
+        HDnet = HDNet(Hnet=HnetDecoder)
+    else:
+        HDnet = HDNet(Hnet=Hnet)
     
     # Run optimal trajectory
     q = torch.tensor(env.sample_q(1, mode='test'), dtype=torch.float)
@@ -49,7 +54,7 @@ def run_traj(env, AdjointNet, Hnet, model_name, time_steps=list(np.arange(0, 1, 
     # Release video
     out.release()
     
-    if env_close and model_name != 'shape_opt':
+    if env_close and env_name != 'shape_opt':
         env.close()
     
 def next_state(q, AdjointNet, HDnet, time_step=1):
@@ -61,61 +66,39 @@ def next_state(q, AdjointNet, HDnet, time_step=1):
 
     return next_q
 
-# Store all network architectures for all environments
-adj_nets = {}
-h_nets = {}
-q_dims = {}
-# Mountain car
-q_dim=2; q_dims['mountain_car'] = q_dim
-adj_nets['mountain_car'] = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
-h_nets['mountain_car'] = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
-# Cartpole
-q_dim=4; q_dims['cartpole'] = q_dim
-adj_nets['cartpole'] = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[16, 32, 32])
-h_nets['cartpole'] = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[16, 32, 64, 8])
-# Pendulum
-q_dim=2; q_dims['pendulum'] = q_dim
-adj_nets['pendulum'] = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[8, 16, 32])
-h_nets['pendulum'] = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[8, 16, 32])
-# Shape opt
-q_dim = 16; q_dims['shape_opt'] = q_dim
-adj_nets['shape_opt'] = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=[32, 64])
-h_nets['shape_opt'] = Mlp(input_dim = 2*q_dim, output_dim=1, layer_dims=[64, 8])
-
-def test(model_name, test_trained=True, phase2=False,
+def test(env_name, test_trained=True, phase2=False,
          time_steps=list(np.arange(0, 1, 0.1)), log_interval=1):
+    
+    # Initialize models (this first to take state dimension q_dim)
+    q_dim, adj_net, hnet, hnet_decoder, _, _ = \
+            get_architectures(arch_file='models/architectures.csv', env_name=env_name)
     # Initialize environment
     isColor = True
-    if model_name == 'mountain_car':
-        env = MountainCar()
-    if model_name == 'cartpole':
-        env = CartPole()
-    if model_name == 'pendulum':
-        env = Pendulum()
-    if model_name == 'shape_opt':
-        env = DensityOpt()
+    env = get_environment(env_name) 
+    if env_name == 'shape_opt':
         isColor = False
-    if model_name != 'shape_opt':
-        env.render(np.zeros(q_dims[model_name]))
+    if env_name != 'shape_opt':
+        env.render(np.zeros(q_dim))
     # Initialize video path
-    video_path = 'videos/test_'+ model_name +'.wmv'
+    video_path = 'videos/test_'+ env_name +'.wmv'
     if not test_trained:
-        print('\nTest untrained ' + model_name + ':')
-        video_path = 'videos/test_'+ model_name +'_untrained.wmv'
+        print('\nTest untrained ' + env_name + ':')
+        video_path = 'videos/test_'+ env_name +'_untrained.wmv'
     elif phase2:
-        print('Test phase 2 for ' + model_name + ':')
-        video_path = 'videos/test_'+ model_name +'_phase2.wmv'
+        print('Test phase 2 for ' + env_name + ':')
+        video_path = 'videos/test_'+ env_name +'_phase2.wmv'
     else:
-        print('Test ' + model_name + ':')
+        print('Test ' + env_name + ':')
+    
     # Run trajectory. This use HD models if test_trained is True
-    run_traj(env, adj_nets[model_name], h_nets[model_name], model_name=model_name, 
+    run_traj(env, adj_net, hnet, hnet_decoder, env_name=env_name, 
                  test_trained=test_trained, phase2=phase2,
                  time_steps=time_steps, log_interval=log_interval,
                  out_video=video_path, isColor=isColor)
     
-test_mt, test_cart, test_pendulum, test_density = False, False, True, False
+test_mt, test_cart, test_pendulum, test_density = False, False, False, False
 if test_mt:
-    test('mountain_car', time_steps=list(np.arange(0, 130, 0.4)), log_interval=1, test_trained=True)
+    test('mountain_car', time_steps=list(np.arange(0, 130, 0.5)), log_interval=1, test_trained=True)
 if test_cart:
     test('cartpole', time_steps=list(np.arange(0, 200, 0.4)), log_interval=2, test_trained=True)
 if test_pendulum:
@@ -123,7 +106,7 @@ if test_pendulum:
 if test_density:
     test('shape_opt', time_steps=list(np.arange(0, 100, 0.4)), log_interval=1, test_trained=True)
     
-test_mt2, test_cart2, test_pendulum2, test_density2 = False, False, False, False
+test_mt2, test_cart2, test_pendulum2, test_density2 = True, False, False, False
 if test_mt2:
     test('mountain_car', time_steps=list(np.arange(0, 24, 0.05)), log_interval=1, test_trained=True, phase2=True)
 if test_cart2:

@@ -1,0 +1,4 @@
+name,price,isLocked
+1a,"[0, 1, 2]",True
+2b,"[2, 3, 5]",False
+3c,"[3, 6, 8]",False
