@@ -96,9 +96,9 @@ def test(env_name, test_trained=True, phase2=False,
                  time_steps=time_steps, log_interval=log_interval,
                  out_video=video_path, isColor=isColor)
     
-test_mt, test_cart, test_pendulum, test_density = False, False, False, False
+test_mt, test_cart, test_pendulum, test_density = True, False, False, False
 if test_mt:
-    test('mountain_car', time_steps=list(np.arange(0, 130, 0.5)), log_interval=1, test_trained=True)
+    test('mountain_car', time_steps=list(np.arange(0, 200, 0.1)), log_interval=1, test_trained=True)
 if test_cart:
     test('cartpole', time_steps=list(np.arange(0, 200, 0.4)), log_interval=2, test_trained=True)
 if test_pendulum:
@@ -106,9 +106,9 @@ if test_pendulum:
 if test_density:
     test('shape_opt', time_steps=list(np.arange(0, 100, 0.4)), log_interval=1, test_trained=True)
     
-test_mt2, test_cart2, test_pendulum2, test_density2 = True, False, False, False
+test_mt2, test_cart2, test_pendulum2, test_density2 = False, False, False, False
 if test_mt2:
-    test('mountain_car', time_steps=list(np.arange(0, 24, 0.05)), log_interval=1, test_trained=True, phase2=True)
+    test('mountain_car', time_steps=list(np.arange(0, 2, 0.1)), log_interval=1, test_trained=True, phase2=True)
 if test_cart2:
     test('cartpole', time_steps=list(np.arange(0, 100, 0.1)), log_interval=1, test_trained=True, phase2=True)
 if test_pendulum2:

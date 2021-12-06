@@ -85,20 +85,23 @@ class MountainCar(ContinuousEnv):
         return np.concatenate((np.zeros((N, 1, 1)), np.ones((N, 1, 1))*self.power), axis=1)
     
     def L(self, q, u):
-        return 0.5*(u[:, 0]**2)
+        return 0.1*(u[:, 0]**2) + self.g(q)
 
     def g(self, q):
-        return (self.goal_position-q[:, 0])**2 + (self.goal_velocity-q[:, 1])**2
+        return (self.goal_velocity-q[:, 1])**2 + (self.goal_position-q[:, 0])**2
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train': 
-            a = 1
+            a = 0.5
         else:
-            a = 0.1
-        return a*np.concatenate(
-            (np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
+            a = 1
+        return np.concatenate(
+            (a*np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
             np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
             axis=1)
+    
+    def criteria_q(self, q):
+        return (self.goal_position-q[0])**2
     
     def _height(self, xs):
         return np.sin(3 * xs) * 0.45 + 0.55

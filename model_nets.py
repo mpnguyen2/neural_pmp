@@ -12,13 +12,14 @@ class HDNet(nn.Module):
     def forward(self, t, x):
         with torch.enable_grad():
             one = torch.tensor(1, dtype=torch.float, requires_grad=True)
-            x = one * x
+            x = one * x      
             q, p = torch.chunk(x, 2, dim=1)
-            q_p = torch.cat((q, p), dim=1)
-            H = self.Hnet(q_p)
-            dH = torch.autograd.grad(H.sum(), q_p, create_graph=True)[0]
-            dq, dp = torch.chunk(dH, 2, dim=1)
-            # Use backward dynamics: f = (-h_p, h_q)
+            q_p_t = torch.cat((q, p, t), dim=1)
+            H = self.Hnet(q_p_t)
+            dH = torch.autograd.grad(H.sum(), q_p_t, create_graph=True)[0]
+            q_dim = x.shape[1]//2
+            dq, dp, dt = torch.split(dH, [q_dim, q_dim, 1], dim=1)
+            # Use forward dynamics: f = (h_p, -h_q)
             return torch.cat((dp, -dq), dim=1)
 
 # Backward Hamiltonian dynamics network
@@ -30,12 +31,13 @@ class HDInverseNet(nn.Module):
     def forward(self, t, x):
         with torch.enable_grad():
             one = torch.tensor(1, dtype=torch.float, requires_grad=True)
-            x = one * x
+            x = one * x      
             q, p = torch.chunk(x, 2, dim=1)
-            q_p = torch.cat((q, p), dim=1)
-            H = self.Hnet(q_p)
-            dH = torch.autograd.grad(H.sum(), q_p, create_graph=True)[0]
-            dq, dp = torch.chunk(dH, 2, dim=1)
+            q_p_t = torch.cat((q, p, t), dim=1)
+            H = self.Hnet(q_p_t)
+            dH = torch.autograd.grad(H.sum(), q_p_t, create_graph=True)[0]
+            q_dim = x.shape[1]//2
+            dq, dp, dt = torch.split(dH, [q_dim, q_dim, 1], dim=1)
             # Use backward dynamics: f = (-h_p, h_q)
             return torch.cat((-dp, dq), dim=1)
 

@@ -11,7 +11,7 @@ from train_utils import training, get_environment, get_architectures, get_train_
         
 def train_env(env_name, num_examples, mode=0, 
               retrain_phase1=True, retrain_phase2=True,
-              num_additional_train=5, num_examples_phase2=0.2,
+              num_additional_train=5, num_examples_phase2=0.2, num_examples_phase3 = 1,
               arch_file='models/architectures.csv', param_file='models/train_params.csv'):
     print(f'\nTraining environment {env_name}:\n')
     env = get_environment(env_name)
@@ -28,10 +28,13 @@ def train_env(env_name, num_examples, mode=0,
         batch_size1=batch_size1, num_epoch1=num_epoch1, lr1=lr1, log_interval1=log_interval1, 
         batch_size2=batch_size2, num_epoch2=num_epoch2, lr2=lr2, log_interval2=log_interval2,
         mode=mode, retrain_phase1=retrain_phase1, retrain_phase2=retrain_phase2,
-        num_examples_phase2=num_examples_phase2, num_additional_train=num_additional_train)
+        num_examples_phase2=num_examples_phase2, num_examples_phase3 = num_examples_phase3,
+        num_additional_train=num_additional_train)
 
 
 train_mt, train_cart, train_pendulum, train_density = True, False, False, False
 
 if train_mt:
-    train_env('mountain_car', num_examples=2000, mode=1, num_examples_phase2=1, retrain_phase1=True)
+    train_env('mountain_car', num_examples=3200, mode=0, num_examples_phase3=0.05, 
+              retrain_phase1=True, retrain_phase2=False, num_additional_train=2)
+

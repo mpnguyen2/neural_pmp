@@ -45,9 +45,9 @@ def get_architectures(arch_file, env_name):
     z_decoder_layer_dims = toList(info['z_decoder_layer_dims'].values[0])
     # Build adjoint variable and Hamiltonian nets
     adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=adj_net_layer_dims)
-    hnet = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_layer_dims)
+    hnet = Mlp(input_dim=2*q_dim+1, output_dim=1, layer_dims=hnet_layer_dims)
     # Build hnet_decoder
-    hnet_decoder = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_decoder_layer_dims)
+    hnet_decoder = Mlp(input_dim=2*q_dim+1, output_dim=1, layer_dims=hnet_decoder_layer_dims)
     # Build latent z_encoder
     z_encoder = Encoder(input_dim=2*q_dim, share_layer_dims=z_encoder_share_layer_dims, 
         mean_layer_dims=z_encoder_mean_layer_dims, 
@@ -123,14 +123,18 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
             # the ending generalized coordinate
             qp_t = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))[-1]
             qt, pt = torch.chunk(qp_t, 2, dim=1)
-            qt_np = qt.detach().numpy()
+            
             #print('qt', qt.shape)
-            ## Loss function = (pt - nabla g(qt))**2 + alpha * (h(q, p) - ((p, f(q, u)) + L(q, u))
-            ## First part require nabla g(qt): (pt - nabla g(qt))**2
-            dg = torch.tensor(env.nabla_g(qt_np))
-            dg0 = torch.tensor(env.nabla_g(q_np))
-            #print('nabla g', dg.shape)
+            ## New loss function 
+            ## L = alpha1*(pt - AdjointNet(qt))**2 + alpha2 * pt**2
+            ## beta * (h(q, p) - ((p, f(q, u)) + L(q, u))
+            ## Currently assume g = 0
+            loss = alpha1 * torch.sum((AdjointNet(qt)-pt)**2) + alpha2 * torch.sum(pt**2)
+            '''
+            qt_np = qt.detach().numpy()
+            dg = torch.tensor(env.nabla_g(qt_np)); dg0 = torch.tensor(env.nabla_g(q_np))
             loss = alpha1*torch.sum((p-dg0)**2) + alpha2*torch.sum((pt-dg)**2)
+            '''
             ## Second part of loss function
             # Calculate optimal u = -p^T f_u(q, u) (based on adjoint)
             u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(q_np), -p_np)
@@ -224,26 +228,28 @@ def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder
                         qs, T=1, num_samples_per_seed=50):
     HDnet = HDNet(Hnet=Hnet)
     q_dim = env.q_dim
-    seed_z = []
+    #seed_z = []
+    q_samples = []
     with torch.no_grad():
         for q in qs:
+            q = q.reshape(1, -1)
             p = AdjointNet(q)
             qp = torch.cat((q, p), axis=1)
-            times = [0]
-            s = 0.05; max_num_step=20
+            times = []
+            s = 0.0; max_num_step=200
             for i in range(max_num_step):
                 times.append(s)
-                s *= 2
+                s += 0.5
             qp_traj = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))
-            for i in range(max_num_step):
-                if env.criteria_q(qp_traj[i].detach().numpy()[:q_dim])\
-                       > env.criteria_q(qp_traj[i+1].detach().numpy()[:q_dim]):
+            for i in range(max_num_step-1):
+                if env.criteria_q(qp_traj[i].detach().numpy()[0, :q_dim])\
+                       < env.criteria_q(qp_traj[i+1].detach().numpy()[0, :q_dim]):
                            seed_qp = qp_traj[i]
-                           seed_z.append(z_encoder(seed_qp))
+                           q_samples.append(seed_qp.detach().numpy()[0, :q_dim])
+                           #seed_z.append(z_encoder(seed_qp))
                            break
-    
+        '''
         HDInversenet = HDInverseNet(HnetDecoder)
-        q_samples = []
         times = [0.0, T]
         for mu, logvar in seed_z:
             std = torch.exp(0.5*logvar)
@@ -251,7 +257,8 @@ def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder
                 eps = torch.randn_like(std)
                 qp_t = z_decoder(mu + eps*std)
                 qp = odeint(HDInversenet, qp_t, torch.tensor(times, requires_grad=True))[-1]
-                q_samples.append(qp.detach().numpy()[:q_dim])
+                q_samples.append(qp.detach().numpy()[0, :q_dim])
+        '''
         
         return np.array(q_samples)
     
@@ -262,7 +269,7 @@ def training(env, env_name, qs,
     batch_size1=32, batch_size2=32, num_epoch1=20, num_epoch2=20,
     lr1=1e-3, lr2=1e-3, log_interval1=50, log_interval2=50,
     mode=0, retrain_phase1=True, retrain_phase2=True,
-    num_examples_phase2=0.2, num_additional_train=5):
+    num_examples_phase2=0.2, num_examples_phase3 = 0.02, num_additional_train=5):
     """
     PMP training procedure with different types of modes
     Args:
@@ -304,24 +311,21 @@ def training(env, env_name, qs,
             print('\nLoaded phase 2 trained models (Hamiltonian decoder and latent encoder and decoder).\n')
         
     if mode == 2:
+        num_examples = int(num_examples_phase3*qs.shape[0])
+        qs2 = torch.clone(qs)[torch.randperm(qs.shape[0])][:num_examples]
         qs_extreme_np = get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder, 
-                        qs, T=1, num_samples_per_seed=50)
+                        qs2, T=1, num_samples_per_seed=1)
+        print('\nNumber of extreme examples: {}'.format(qs_extreme_np.shape[0]))
         qs_extreme = torch.tensor(qs_extreme_np, dtype=torch.float)
         
         print('\nRetraining phase 1 with new data...')
         for i in range(num_additional_train):
             print(f'\nRetraining phase 1 with new data {i}th time...')
-            # Training using extreme data
-            train_phase_1(env, AdjointNet, Hnet, qs_extreme, 
+            # Training using both extreme and usual data
+            train_phase_1(env, AdjointNet, Hnet, torch.cat((qs_extreme, qs), dim=0), 
                 T1, control_coef, dynamic_hidden, 
                 alpha1, alpha2, beta=beta1, 
-                batch_size=batch_size1, num_epoch=num_epoch1, lr=lr1, 
-                log_interval=log_interval1)
-            # Training using usual data
-            train_phase_1(env, AdjointNet, Hnet, qs, 
-                T1, control_coef, dynamic_hidden, 
-                alpha1, alpha2, beta=beta1, 
-                batch_size=batch_size1, num_epoch=num_epoch1, lr=lr1, 
+                batch_size=batch_size1, num_epoch=20, lr=lr1, 
                 log_interval=log_interval1)
 
     # Save models
