@@ -1,5 +1,7 @@
-env_name,T1,T2,dynamic_hidden,control_coef,alpha1,alpha2,beta1,beta2,batch_size1,batch_size2,num_epoch1,num_epoch2,lr1,lr2,log_interval1,log_interval2
-mountain_car,10,1,FALSE,0.1,1,0.1,1,1,32,10,5,10,1.00E-03,1.00E-03,20,40
-cartpole,1,1,FALSE,-0.5,1,0.1,1,1,10,10,2,2,1.00E-03,1.00E-03,400,40
-pendulum,1,1,FALSE,0.5,1,0.1,1,1,10,10,2,2,1.00E-03,1.00E-03,400,40
-shape_opt,1,1,FALSE,0.5,0,1,1,1,10,10,2,2,1.00E-03,1.00E-03,40,40
+env_name,T,n_timesteps,control_coef,batch_size,lr_hnet,lr_adj,update_interval,log_interval
+mountain_car,5,50,0.5,32,1.00E-03,1.00E-03,10,1
+cartpole,5,50,-0.5,32,1.00E-03,1.00E-03,10,1
+pendulum,5,50,0.5,32,1.00E-03,1.00E-03,10,1
+shape_opt,5,50,-0.1,32,1.00E-03,1.00E-03,10,1
+shape_opt_boundary,10,200,0.5,32,1.00E-05,1.00E-03,10,2000
+,,,,,,,,

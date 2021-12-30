@@ -73,6 +73,7 @@ class MountainCar(ContinuousEnv):
         )
         self.goal_velocity = goal_velocity
         self.power = 0.0015
+        self.control_coef = 0.5
     
     # (q0, q1) = (position, velocity)
     def f(self, q, u):
@@ -85,10 +86,15 @@ class MountainCar(ContinuousEnv):
         return np.concatenate((np.zeros((N, 1, 1)), np.ones((N, 1, 1))*self.power), axis=1)
     
     def L(self, q, u):
-        return 0.1*(u[:, 0]**2) + self.g(q)
+        return self.control_coef*(u[:, 0]**2) + self.g(q)
 
+    def get_energy(self, q, p):
+        u = (1.0/(2*self.control_coef))*np.einsum('ijk,ij->ik', self.f_u(q), -p)
+        #print('Control: {}\n'.format(u))
+        return np.sum(u)/self.power
+    
     def g(self, q):
-        return (self.goal_velocity-q[:, 1])**2 + (self.goal_position-q[:, 0])**2
+        return np.maximum(0, self.goal_velocity-q[:, 1]) + np.maximum(0, self.goal_position-q[:, 0])
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train': 
@@ -97,7 +103,7 @@ class MountainCar(ContinuousEnv):
             a = 1
         return np.concatenate(
             (a*np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
-            np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
+            np.zeros((num_examples, 1))),
             axis=1)
     
     def criteria_q(self, q):
@@ -107,6 +113,12 @@ class MountainCar(ContinuousEnv):
         return np.sin(3 * xs) * 0.45 + 0.55
     
     def render(self, q, mode="rgb_array"):
+        # Set position and velocity boundary
+        if q[0] >= self.goal_position:
+            q[0] = self.goal_position
+        if q[1] >= self.goal_velocity:
+            q[1] = self.goal_velocity
+            
         screen_width = 600
         screen_height = 400
 

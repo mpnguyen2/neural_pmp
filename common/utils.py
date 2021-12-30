@@ -1,8 +1,9 @@
 import numpy as np
+import pandas as pd
 from scipy import interpolate
 import cv2
-import torch
 
+## Spline interpolation for shape optimization tasks
 # Spline interpolation for 2D density problem
 def spline_interp(z, xk, yk, xg, yg):
     # Interpolate knots with bicubic spline
