@@ -28,7 +28,7 @@ def run_traj(env, AdjointNet, Hnet, env_name, test_trained=True, out_dir='output
     print('Done finding trajectory...')
     # Print trajectory and save states to qs
     cnt = 0; eps = 1e-5
-    qs = np.zeros(len(traj), q.shape[1])
+    qs = np.zeros((len(traj), q.shape[1]))
     for e in traj:
         qe, pe = torch.chunk(e, 2, dim=1)
         qe_np = qe.detach().numpy()
@@ -56,7 +56,7 @@ def test(env_name, test_trained=True, T=5.0, n_timesteps=50, log_interval=1):
                  test_trained=test_trained, 
                  T=T, n_timesteps=n_timesteps, log_interval=log_interval)
 
-def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/', out_dir='videos/'):
+def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/', out_dir='output/videos/'):
     # Initialize environment
     env = get_environment(env_name) 
     isColor = True
@@ -65,12 +65,12 @@ def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/',
     if env_name != 'shape_opt':
         env.render(np.zeros(env.q_dim))
     # Initialize video writer
-    video_file = out_dir+ env_name +'.wmv'
+    video_file = out_dir + env_name +'.wmv'
     if not test_trained:
         print('\nTest untrained ' + env_name + ':')
-        video_file = 'videos/test_'+ env_name +'_untrained.wmv'
+        video_file = out_dir + env_name +'_untrained.wmv'
     else:
-        print('Test ' + env_name + ':')
+        print('\nDisplaying optimal trajectory for ' + env_name + ':')
     # Setup video writer
     fourcc = cv2.VideoWriter_fourcc(*'WMV1')
     out = cv2.VideoWriter(video_file, fourcc, 20.0, (env.viewer.width, env.viewer.height), isColor=isColor)
@@ -79,9 +79,11 @@ def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/',
     qs = np.load(input_file)
     # Write rendering image
     for i in range(qs.shape[0]):
-        out.write(env.render(q[i].reshape(-1)))
+        out.write(env.render(qs[i].reshape(-1)))
     # Release video
     out.release()
+    env.close()
+    print('\nDone displaying the optimal trajectory!')
     
 if __name__ == '__main__':
     # Argument parsing
