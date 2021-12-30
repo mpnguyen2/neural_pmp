@@ -245,6 +245,7 @@ def train_phase_1(device, env, num_trajs, AdjointNet, Hnet, Hnet_target,
             total_loss = 0
         iter += 1
     # Finally we train the adjoint net
+    HDnet.copy_params(Hnet) # Copy parameters from Hnet to Hnet_target
     iter = 0; total_loss = 0
     while iter < num_adjoint_train_max:
         loss_adj = fit_adjoint(device, AdjointNet, HDnet, memory, optim_adj, batch_size)
