@@ -1,5 +1,6 @@
 from collections import namedtuple, deque
 import random
+import time
 
 import numpy as np
 import pandas as pd
@@ -79,10 +80,10 @@ def get_train_params(param_file, env_name):
     control_coef = info['control_coef'].values[0]
     # Get training details for first phase (batch_size, num_epoch, lr, log_interval)
     # Currently refocus on first phase
-    batch_size, lr_hnet, lr_adj, update_interval, log_interval = info['batch_size'].values[0], info['lr_hnet'].values[0],\
+    lr_hnet, lr_adj, update_interval, log_interval = info['lr_hnet'].values[0],\
         info['lr_adj'].values[0], info['update_interval'].values[0], info['log_interval'].values[0]
 
-    return float(T), int(n_timesteps), control_coef, int(batch_size), lr_hnet, lr_adj, int(update_interval), int(log_interval)
+    return float(T), int(n_timesteps), control_coef, lr_hnet, lr_adj, int(update_interval), int(log_interval)
 
 def get_test_params(param_file, env_name):
     pass
@@ -177,12 +178,13 @@ def fit_Hnet(memory, Hnet, optim_hnet, batch_size):
     return loss
 
 # Fit AdjointNet (minimize |pT|)
-def fit_adjoint(device, AdjointNet, HDnet, memory, times, optim_adj, batch_size):
+def fit_adjoint(device, AdjointNet, HDnet, memory, optim_adj, batch_size):
     transitions = memory.sample(batch_size)
     batch = Transition(*zip(*transitions))
     q = torch.cat(batch.q)
     p = AdjointNet(q)
     qp = torch.cat((q, p), axis=1)
+    times = list(np.linspace(0, 1 + 1e-5, 10))
     qps = odeint(HDnet, qp, torch.tensor(times, device=device, requires_grad=True))
     _, pt = torch.chunk(qps[-1], 2, axis=0)
     criterion = torch.nn.SmoothL1Loss()
@@ -198,8 +200,8 @@ def fit_adjoint(device, AdjointNet, HDnet, memory, times, optim_adj, batch_size)
 ## Main training procedure ##
 def train_phase_1(device, env, num_trajs, AdjointNet, Hnet, Hnet_target, 
                 T_end = 5.0, n_timesteps=50, control_coef=0.5,
-                batch_size=32, update_interval=10, rate=2, mem_capacity=10000,
-                num_hnet_train_max=40000, num_adjoint_train_max=1000, stop_train_condition=0.001,
+                batch_size=32, update_interval=10, rate=1.5, mem_capacity=10000,
+                num_hnet_train_max=40000, num_adjoint_train_max=1000, stop_train_condition=0.01,
                 lr_hnet=1e-3, lr_adj=1e-3, log_interval=50):
     # Load to device (GPU)
     AdjointNet = AdjointNet.to(device); Hnet = Hnet.to(device); Hnet_target = Hnet_target.to(device)
@@ -228,25 +230,29 @@ def train_phase_1(device, env, num_trajs, AdjointNet, Hnet, Hnet_target,
         loss_h = fit_Hnet(memory, Hnet, optim_hnet, batch_size)
         total_loss += loss_h
         if iter % log_interval == 0:
-            print('\nIter {}: Average loss for (pretrained) reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/(log_interval*batch_size)))
+            print('\nIter {}: Average loss for (pretrained) reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
             total_loss = 0
         iter += 1
     # Additional training for reduced Hamiltonian
     iter = 0; total_loss = 0
-    while iter < num_hnet_train_max and (iter < num_hnet_train_max/2 or total_loss < stop_train_condition):
+    while iter < num_hnet_train_max:
         loss_h = fit_Hnet(memory, Hnet, optim_hnet, batch_size)
         total_loss += loss_h
         if iter % log_interval == 0:
-            print('\nIter {}: Average loss for reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/(log_interval*batch_size)))
+            print('\nIter {}: Average loss for reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            if total_loss < stop_train_condition:
+                break
             total_loss = 0
         iter += 1
     # Finally we train the adjoint net
     iter = 0; total_loss = 0
-    while iter < num_adjoint_train_max and (iter < num_adjoint_train_max/2 or total_loss < stop_train_condition):
-        loss_adj = fit_adjoint(device, AdjointNet, HDnet, memory, times, optim_adj, batch_size)
+    while iter < num_adjoint_train_max:
+        loss_adj = fit_adjoint(device, AdjointNet, HDnet, memory, optim_adj, batch_size)
         total_loss += loss_adj
         if iter % log_interval == 0:
-            print('\nIter {}: Average loss for adjoint network: {:.3f}'.format(iter+1, total_loss/(log_interval*batch_size)))
+            print('\nIter {}: Average loss for adjoint network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            if total_loss < stop_train_condition:
+                break
             total_loss = 0
         iter += 1
 
@@ -320,8 +326,8 @@ def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder
 def training(device, env, env_name, num_trajs,
     AdjointNet, Hnet, Hnet_target,
     T=5.0, n_timesteps=50, control_coef=0.5,
-    batch_size=32, update_interval=10, rate=2,
-    num_hnet_train_max=40000, num_adjoint_train_max=1000, stop_train_condition=0.001,
+    batch_size=32, update_interval=10, rate=1.5,
+    num_hnet_train_max=40000, num_adjoint_train_max=1000, stop_train_condition=0.01,
     lr_hnet=1e-3, lr_adj=1e-3, log_interval=1,
     retrain_phase1=True):
     """
@@ -336,7 +342,7 @@ def training(device, env, env_name, num_trajs,
         update_interval: When to update target hamiltonian net
         log_interval: Record training losses interval
     """
-    
+    start_time = time.time()
     if retrain_phase1:
         print('\nTraining phase 1...')
         train_phase_1(device, env, num_trajs, AdjointNet, Hnet, Hnet_target, 
@@ -353,4 +359,4 @@ def training(device, env, env_name, num_trajs,
     # Save models
     print('\nDone training. Saving model...')
     save_models_phase1(AdjointNet, Hnet, env_name)
-    print('Model saved!')
+    print('\nModel saved. Training time is {:.4f} minutes'.format((time.time()-start_time)/60))

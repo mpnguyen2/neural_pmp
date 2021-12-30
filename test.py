@@ -87,7 +87,7 @@ def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/',
     
 if __name__ == '__main__':
     # Argument parsing
-    parser = argparse.ArgumentParser(description = '')
+    parser = argparse.ArgumentParser(description='CLI argument for testing')
     parser.add_argument('env_name', help='Environment to train neural pmp on')
     parser.add_argument('--T', type=int, default=1, help='Terminal time')
     parser.add_argument('--nt', type=int, default=100, help='Number of time steps')

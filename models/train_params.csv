@@ -1,7 +1,6 @@
-env_name,T,n_timesteps,control_coef,batch_size,lr_hnet,lr_adj,update_interval,log_interval
-mountain_car,5,50,0.5,32,1.00E-03,1.00E-03,10,1
-cartpole,5,50,-0.5,32,1.00E-03,1.00E-03,10,1
-pendulum,5,50,0.5,32,1.00E-03,1.00E-03,10,1
-shape_opt,5,50,-0.1,32,1.00E-03,1.00E-03,10,1
-shape_opt_boundary,10,200,0.5,32,1.00E-05,1.00E-03,10,2000
-,,,,,,,,
+env_name,T,n_timesteps,control_coef,lr_hnet,lr_adj,update_interval,log_interval
+mountain_car,5,50,0.5,1.00E-03,1.00E-03,10,2000
+cartpole,5,50,-0.5,1.00E-03,1.00E-03,10,2000
+pendulum,5,50,0.5,1.00E-03,1.00E-03,10,2000
+shape_opt,5,50,-0.1,1.00E-03,1.00E-03,10,2000
+shape_opt_boundary,10,200,0.5,1.00E-05,1.00E-03,10,2000
