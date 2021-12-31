@@ -30,9 +30,10 @@ class HDStochasticNet(nn.Module):
     noise_type = 'general'
     sde_type = 'ito'
 
-    def __init__(self, Hnet, device):
+    def __init__(self, Hnet, sigma, device):
         super(HDStochasticNet, self).__init__()
         self.Hnet = Hnet
+        self.sigma = sigma
         self.device = device
 
     # Drift
@@ -51,7 +52,7 @@ class HDStochasticNet(nn.Module):
 
     # Constant diffusion
     def g(self, t, x):
-        return torch.stack([torch.eye(x.shape[1]) for _ in range(x.shape[0])], axis=0).to(self.device)
+        return self.sigma*torch.stack([torch.eye(x.shape[1]) for _ in range(x.shape[0])], axis=0).to(self.device)
 
     # Copy paramter for kernel Hnet from another net
     def copy_params(self, net):

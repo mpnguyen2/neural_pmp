@@ -208,7 +208,7 @@ def fit_adjoint(stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_
     return loss
 
 ## Main training procedure ##
-def train_phase_1(stochastic, device, env, num_episodes, AdjointNet, Hnet, Hnet_target, 
+def train_phase_1(stochastic, sigma, device, env, num_episodes, AdjointNet, Hnet, Hnet_target, 
                 T_end = 5.0, n_timesteps=50, control_coef=0.5,
                 batch_size=32, update_interval=10, rate=1.5, mem_capacity=10000,
                 num_hnet_train_max=40000, num_adjoint_train_max=1000, stop_train_condition=0.01,
@@ -217,7 +217,7 @@ def train_phase_1(stochastic, device, env, num_episodes, AdjointNet, Hnet, Hnet_
     AdjointNet = AdjointNet.to(device); Hnet = Hnet.to(device); Hnet_target = Hnet_target.to(device)
     # HDnet calculate the Hamiltonian dynamics network given the Hamiltonian target network
     if stochastic:
-        HDnet = HDStochasticNet(Hnet=Hnet_target, device=device).to(device)
+        HDnet = HDStochasticNet(Hnet=Hnet_target, sigma=sigma, device=device).to(device)
     else:
         HDnet = HDNet(Hnet=Hnet_target).to(device)
     # Optimizers for Hnet and AdjointNet
@@ -340,7 +340,7 @@ def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder
         
         return np.array(q_samples)
     
-def training(stochastic, device, env, env_name, num_episodes,
+def training(stochastic, sigma, device, env, env_name, num_episodes,
     AdjointNet, Hnet, Hnet_target,
     T=5.0, n_timesteps=50, control_coef=0.5,
     batch_size=32, update_interval=10, rate=1.5,
@@ -362,7 +362,7 @@ def training(stochastic, device, env, env_name, num_episodes,
     start_time = time.time()
     if retrain_phase1:
         print('\nTraining phase 1...')
-        train_phase_1(stochastic, device, env, num_episodes, AdjointNet, Hnet, Hnet_target, 
+        train_phase_1(stochastic, sigma, device, env, num_episodes, AdjointNet, Hnet, Hnet_target, 
                   T_end = T, n_timesteps=n_timesteps, control_coef=control_coef,
                   batch_size=batch_size, update_interval=update_interval, rate=rate,
                   num_hnet_train_max=num_hnet_train_max, num_adjoint_train_max=num_adjoint_train_max, 
