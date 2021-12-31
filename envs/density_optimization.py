@@ -28,7 +28,7 @@ class DensityOptBoundary(ContinuousEnv):
     
     # Lagrangian or running cost L
     def L(self, q, u):
-        return 0.5*np.sum(u**2, axis=1) + self.g(q)
+        return 0.1*np.sum(u**2, axis=1) + self.g(q)
     
     # Terminal cost g
     def g(self, q):
@@ -42,8 +42,8 @@ class DensityOptBoundary(ContinuousEnv):
         return ret
           
     def sample_q(self, num_examples, mode='train', shape='random'):
-        if mode == 'train':
-            return 0.4*(np.random.rand(num_examples, self.q_dim) - .5)
+        #if mode == 'train':
+        #    return 0.4*(np.random.rand(num_examples, self.q_dim) - .5)
 
         # For test, either sample from a random shape with above/below parts or ellipse or square
         return self.sample_distinct_q(num_examples, shape=shape)
