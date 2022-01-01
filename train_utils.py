@@ -14,6 +14,9 @@ from model_nets import HDNet, HDStochasticNet, HDVAE, HDInverseNet
 from envs.classical_controls import MountainCar, CartPole, Pendulum
 from envs.density_optimization import DensityOpt, DensityOptBoundary
 
+# Constant clipping value
+MAX_VAL = 10.0
+
 def toList(s):
     tokens = s[1:-1].split(", ")
     ans = []
@@ -152,7 +155,12 @@ def sample_step(q, env, HDnet, times, memory, control_coef, stochastic, device):
     for i in range(qps.shape[0]):
         qpi_np = qps[i].cpu().detach().numpy()
         qi_np, pi_np = np.split(qpi_np, 2, axis=1)
+        # Clipping if things are stochastic
+        if stochastic:
+            qi_np, pi_np = np.clip(qi_np, -MAX_VAL, MAX_VAL), np.clip(pi_np, -MAX_VAL, MAX_VAL)
+        # Calculate u based on PMP condition H_u = 0
         u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(qi_np), -pi_np)
+        # Store info into a tuple for replay memory
         dynamic = env.f(q, u); reward = env.L(q, u)
         memory.push(torch.tensor(qi_np, dtype=torch.float, device=device), torch.tensor(pi_np, dtype=torch.float, device=device), 
             torch.tensor(u, dtype=torch.float, device=device), torch.tensor(dynamic, dtype=torch.float, device=device), 
@@ -184,10 +192,11 @@ def fit_Hnet(memory, Hnet, optim_hnet, batch_size):
     return loss
 
 # Fit AdjointNet (minimize |pT|)
-def fit_adjoint(stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_size):
-    transitions = memory.sample(batch_size)
-    batch = Transition(*zip(*transitions))
-    q = torch.cat(batch.q)
+def fit_adjoint(env, stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_size):
+    #transitions = memory.sample(batch_size)
+    #batch = Transition(*zip(*transitions))
+    #q = torch.cat(batch.q)
+    q = torch.tensor(env.sample_q(batch_size), dtype=torch.float, device=device)
     p = AdjointNet(q)
     qp = torch.cat((q, p), axis=1)
     times = list(np.linspace(0, 0.2, 2))
@@ -196,13 +205,18 @@ def fit_adjoint(stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_
         qps = sdeint(HDnet, qp, times)
     else:
         qps = odeint(HDnet, qp, times)
-    _, pt = torch.chunk(qps[-1], 2, axis=0)
+    qt, pt = torch.chunk(qps[-1], 2, axis=1)
+    # Clipping if things are stochastic
+    if stochastic:
+        qt, pt = torch.clip(qt, -MAX_VAL, MAX_VAL), torch.clip(pt, -MAX_VAL, MAX_VAL)
+    nabla_gt = torch.tensor(env.nabla_g(qt.cpu().detach().numpy()), dtype=torch.float, device=device)
     criterion = torch.nn.SmoothL1Loss()
-    loss = criterion(pt, torch.zeros(pt.shape, device=device, dtype=torch.float))
+    #loss = criterion(pt, torch.zeros(pt.shape, device=device, dtype=torch.float))
+    loss = criterion(pt, nabla_gt)
     optim_adj.zero_grad()
     loss.backward()
-    #for param in AdjointNet.parameters():
-    #    param.grad.data.clamp_(-1, 1)
+    for param in AdjointNet.parameters():
+        param.grad.data.clamp_(-1, 1)
     optim_adj.step()
 
     return loss
@@ -264,7 +278,7 @@ def train_phase_1(stochastic, sigma, device, env, num_episodes, AdjointNet, Hnet
     iter = 0; total_loss = 0
     log_interval_adj = 10
     while iter < num_adjoint_train_max:
-        loss_adj = fit_adjoint(stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_size)
+        loss_adj = fit_adjoint(env, stochastic, device, AdjointNet, HDnet, memory, optim_adj, batch_size)
         total_loss += loss_adj
         if iter % log_interval_adj == 0:
             print('\nIter {}: Average loss for adjoint network: {:.3f}'.format(iter+1, total_loss/log_interval))

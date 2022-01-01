@@ -13,12 +13,13 @@ from train_utils import training, get_environment, get_architectures, get_train_
 device_default = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def train_env(env_name, stochastic=False, sigma=1, device=device_default, num_episodes=20, rate=1.5, batch_size=32, 
-        num_hnet_train_max=10000, num_adjoint_train_max=1000, stop_train_condition=0.01, retrain_phase1=True, 
-        model_dir = 'models/', lr_change=False, lr_hnet_custom=1e-3, lr_adj_custom=1e-3):
+        update_interval_custom=-1, log_interval_custom=-1, num_hnet_train_max=10000, num_adjoint_train_max=1000, 
+        stop_train_condition=0.01, retrain_phase1=True, model_dir = 'models/', lr_change=False, lr_hnet_custom=1e-3, lr_adj_custom=1e-3):
     # Get and print hyperparameters info
     print(f'\nGeneral info for training hyperparameters:')
-    print(f'Device: {device}, number of total trajectories used: {num_episodes}, rate at which to train hamiltonian while sampling: {rate}.')
-    print(f'Batch size: {batch_size}, number of maximum training iteration for Hamiltonian'
+    print(f'Device: {device}. Total number of episodes used: {num_episodes}.')
+    print(f'Rate at which to train hamiltonian while sampling: {rate}.')
+    print(f'Batch size: {batch_size}. Number of maximum training iteration for Hamiltonian'
         + f' is {num_hnet_train_max} and for Adjoint network is {num_adjoint_train_max}.')
     if lr_change:
         print(f'Learning rate for hamiltonian net is {lr_hnet_custom}, and for adjoint net is {lr_adj_custom}.')
@@ -32,6 +33,11 @@ def train_env(env_name, stochastic=False, sigma=1, device=device_default, num_ep
     T, n_timesteps, control_coef, lr_hnet, lr_adj, update_interval, log_interval = get_train_params(param_file, env_name)
     if not lr_change:
         print(f'Learning rate for hamiltonian net is {lr_hnet}, and for adjoint net is {lr_adj}.')
+    if update_interval_custom != -1:
+        update_interval = update_interval_custom
+    if log_interval_custom != -1:
+        log_interval = log_interval_custom
+    print(f'Update interval (# times to minimize Hamiltonian before sampling): {update_interval}. Log interval: {log_interval}')
 
     # Training step
     version = 'stochastic' if stochastic else 'deterministic'
@@ -52,16 +58,19 @@ if __name__ == '__main__':
     parser.add_argument('--num_episodes', type=int, default=20, help='Number of total trajectories to be sampled during training')
     parser.add_argument('--rate', type=float, default=1.5, help='Training rate everything we get a sample from the trajectory')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
+    parser.add_argument('--update_interval', type=int, default=-1, help='number of times to optimize Hamiltonian net before sampling')
+    parser.add_argument('--log_interval', type=int, default=-1, help='Training log interval')
     parser.add_argument('--num_hnet_train_max', type=int, default=50000, help='Number of maximum (additional) training steps for reduced Hamiltonian')
     parser.add_argument('--num_adjoint_train_max', type=int, default=5000, help='Number of maximum training steps for adjoint network')
     parser.add_argument('--stop_train_condition', type=float, default=0.001, help='Condition when to stop the training (early)')
     parser.add_argument('--lr_change', type=bool, default=False, help='Whether to change learning rates by yourself')
-    parser.add_argument('--lr_hnet_custom', type=float, default=1e-3, help='Learning rate for hamiltonian network')
-    parser.add_argument('--lr_adj_custom', type=float, default=1e-3, help='Learning rate for adjoint network')
+    parser.add_argument('--lr_hnet', type=float, default=1e-3, help='Learning rate for hamiltonian network')
+    parser.add_argument('--lr_adj', type=float, default=1e-3, help='Learning rate for adjoint network')
     #parser.add_argument('num_episodes', help='Number of trajectories to be trained')
     args = parser.parse_args()
     # Call train environment
     train_env(env_name=args.env_name, stochastic=args.stochastic, sigma=args.sigma, device=args.device, num_episodes=args.num_episodes, 
-        rate=args.rate, batch_size=args.batch_size, num_hnet_train_max=args.num_hnet_train_max, num_adjoint_train_max=args.num_adjoint_train_max,
+        rate=args.rate, batch_size=args.batch_size, update_interval_custom=-args.update_interval, log_interval_custom=args.log_interval, 
+        num_hnet_train_max=args.num_hnet_train_max, num_adjoint_train_max=args.num_adjoint_train_max, 
         stop_train_condition=args.stop_train_condition, lr_change=args.lr_change, 
-        lr_hnet_custom=args.lr_hnet_custom, lr_adj_custom=args.lr_adj_custom)
+        lr_hnet_custom=args.lr_hnet, lr_adj_custom=args.lr_adj)

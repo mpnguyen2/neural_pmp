@@ -92,9 +92,11 @@ if __name__ == '__main__':
     parser.add_argument('--T', type=int, default=1, help='Terminal time')
     parser.add_argument('--nt', type=int, default=100, help='Number of time steps')
     parser.add_argument('--log', type=int, default=1, help='Log interval')
+    parser.add_argument('--run_traj', type=bool, default=False, help='Whether to run trajectory and save it to np file')
     parser.add_argument('--display', type=bool, default=False, help='Whether to display (optimal) trajectory')
     args = parser.parse_args()
     # Call train environment
-    test(env_name=args.env_name, T=args.T, n_timesteps=args.nt, log_interval=args.log)
+    if args.run_traj:
+        test(env_name=args.env_name, T=args.T, n_timesteps=args.nt, log_interval=args.log)
     if args.display:
         display(args.env_name)
