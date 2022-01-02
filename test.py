@@ -12,26 +12,58 @@ from envs.density_optimization import DensityOpt
 
 from train_utils import get_environment, get_architectures
 
-def run_traj(env, AdjointNet, Hnet, env_name, test_trained=True, out_dir='output/optimal_traj_numpy/',
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir='output/optimal_traj_numpy/',
              T=5.0, n_timesteps=50, log_interval=1):
     # Load models
-    if test_trained:
-        AdjointNet.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
-        Hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
-    HDnet = HDNet(Hnet=Hnet)
-    # Run optimal trajectory
-    q = torch.tensor(env.sample_q(1, mode='test'), dtype=torch.float)
-    p = AdjointNet(q)
+    if use_hnet:
+        hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
+    HDnet = HDNet(Hnet=hnet).to(device)
+    if use_adj:
+        adj_net.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
+    # Sample state
+    q = torch.tensor(env.sample_q(1, mode='test'), dtype=torch.float, device=device)
+    nabla_s = env.nabla_g(q.cpu().detach().numpy())
+    # Finding appropriate adjoint variable either by adjoint network
+    # or by searching randomly over the one give the best terminal state given the fixed and trained hamiltonian dynamics
+    if use_adj:
+        p = adj_net(q)
+    else:
+        num_trials = 1000
+        q_dup = torch.cat([q for _ in range(num_trials)])
+        ps = torch.rand(num_trials, q.shape[1], dtype=torch.float, device=device) - .5 #AdjointNet(q)
+        max_ind = -1; min_val = 100
+        test_times = list(np.linspace(0, T, 2))
+        test_times = torch.tensor(test_times, requires_grad=True, device=device)
+        print('Looking for optimal starting adjoint...')
+        qp = torch.cat((q_dup, ps), axis=1)
+        with torch.no_grad():
+            traj = odeint(HDnet, qp, test_times)
+        print('Done running batch of testing adjoints p and duplicate of states q')
+        for i in range(num_trials):
+            qt, _ = torch.chunk(traj[-1, i:(i+1)], 2, dim=1)
+            cost = env.g(qt.cpu().detach().numpy())[0]
+            if cost < min_val:
+                max_ind = i
+                min_val = cost
+        p = ps[max_ind:(max_ind+1)]
+
+    print('Done finding optimal starting adjoint. Finding optimal trajectory...')
+
+    # Given p, run the (optimal) trajectory
+    cnt = 0; eps = 1e-5
     qp = torch.cat((q, p), axis=1)
     time_steps = list(np.linspace(0, T+ 1e-5, n_timesteps))
-    traj = odeint(HDnet, qp, torch.tensor(time_steps, requires_grad=True))
+    time_steps = torch.tensor(time_steps, requires_grad=True, device=device)
+    with torch.no_grad():
+        traj = odeint(HDnet, qp, time_steps)
     print('Done finding trajectory...')
-    # Print trajectory and save states to qs
-    cnt = 0; eps = 1e-5
+    # Then save states on the trajectory to qs
     qs = np.zeros((len(traj), q.shape[1]))
     for e in traj:
-        qe, pe = torch.chunk(e, 2, dim=1)
-        qe_np = qe.detach().numpy()
+        qe, _ = torch.chunk(e, 2, dim=1)
+        qe_np = qe.cpu().detach().numpy()
         qs[cnt, :] = qe_np
         if cnt % log_interval == 0:
             # Print info
@@ -41,19 +73,29 @@ def run_traj(env, AdjointNet, Hnet, env_name, test_trained=True, out_dir='output
             if cost < eps:
                 break
         cnt += 1
+    # Print numerical information
+    nabla_t = env.nabla_g(qs[-1:])
+    _, pt = torch.chunk(traj[-1], 2, dim=1)
+    print('\nSome numerical information for further debugging:')
+    print('Starting nabla:', nabla_s)
+    print('Terminal nabla:', nabla_t)
+    print('Adjoint:', p.cpu().detach().numpy())
+    print('Terminal adjoint:', pt.cpu().detach().numpy())
+
     env.close()
+
     # Save numpy to out_file
     out_file = out_dir + env_name + '.npy'
     np.save(out_file, qs, allow_pickle=False)
 
-def test(env_name, test_trained=True, T=5.0, n_timesteps=50, log_interval=1):
+def test(env_name, use_adj=False, use_hnet=True, T=5.0, n_timesteps=50, log_interval=1):
     # Initialize models and environments
     _, adj_net, hnet, _ =  get_architectures(arch_file='models/architectures.csv', env_name=env_name)
     env = get_environment(env_name) 
     
     # Run trajectory. This use HD models if test_trained is True
     run_traj(env, adj_net, hnet, env_name=env_name, 
-                 test_trained=test_trained, 
+                 use_adj=use_adj, use_hnet=use_hnet,
                  T=T, n_timesteps=n_timesteps, log_interval=log_interval)
 
 def display(env_name, test_trained=True, input_dir='output/optimal_traj_numpy/', out_dir='output/videos/'):
@@ -89,14 +131,15 @@ if __name__ == '__main__':
     # Argument parsing
     parser = argparse.ArgumentParser(description='CLI argument for testing')
     parser.add_argument('env_name', help='Environment to train neural pmp on')
-    parser.add_argument('--T', type=int, default=1, help='Terminal time')
-    parser.add_argument('--nt', type=int, default=100, help='Number of time steps')
+    parser.add_argument('--use_adj', type=bool, default=False, help='Whether to use adjacency network or greedily select the best adjoint state')
+    parser.add_argument('--T', type=float, default=1, help='Terminal time')
+    parser.add_argument('--num_steps', type=int, default=100, help='Number of time steps')
     parser.add_argument('--log', type=int, default=1, help='Log interval')
     parser.add_argument('--run_traj', type=bool, default=False, help='Whether to run trajectory and save it to np file')
     parser.add_argument('--display', type=bool, default=False, help='Whether to display (optimal) trajectory')
     args = parser.parse_args()
     # Call train environment
     if args.run_traj:
-        test(env_name=args.env_name, T=args.T, n_timesteps=args.nt, log_interval=args.log)
+        test(env_name=args.env_name, use_adj=args.use_adj, T=args.T, n_timesteps=args.num_steps, log_interval=args.log)
     if args.display:
         display(args.env_name)
