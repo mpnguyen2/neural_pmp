@@ -193,31 +193,6 @@ def fit_hnet(memory, hnet, optim_hnet, batch_size):
 
     return loss
 
-# Fit AdjointNet (minimize |pT|)
-def fit_adjoint(q, env, times, adj_net, HDnet, optim_adj, stochastic, device):
-    zero_tensor = torch.zeros(q.shape[0], q.shape[1], dtype=torch.float, device=device)
-    criterion = torch.nn.SmoothL1Loss()
-    p = adj_net(q.to(device))
-    qp = torch.cat((q.to(device), p), axis=1)
-    if stochastic:
-        qps = sdeint(HDnet, qp, times)
-    else:
-        qps = odeint(HDnet, qp, times)
- 
-    _, pt = torch.chunk(qps[-1], 2, axis=1)
-    if stochastic:
-        pt = torch.clip(pt, -MAX_VAL, MAX_VAL) # Clipping if things are stochastic
-    #nabla_qi = torch.tensor(env.nabla_g(qi.cpu().detach().numpy()), dtype=torch.float, device=device)
-    loss = criterion(pt, zero_tensor)
-    
-    optim_adj.zero_grad()
-    loss.backward()
-    for param in adj_net.parameters():
-        param.grad.data.clamp_(-1, 1)
-    optim_adj.step()
-
-    return loss
-
 def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet_target, 
                 T_end=5.0, n_timesteps=50, control_coef=0.5, use_adj_net=False, 
                 update_interval=10, rate=1, mem_capacity=10000, batch_size_sample=256, batch_size=32, 
@@ -278,8 +253,61 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet
         iter += 1
     print('\nDone training for Hamiltonian net.')
 
+def sample_generator(qs, batch_size, shuffle=True):
+    index = 0
+    # initialize the list that will contain the current batch
+    cur_batch = []
+    # Number of data in qs
+    num_q = qs.shape[0]
+    # create index array
+    data_index = [*range(num_q)]
+    # shuffle line indexes if shuffle is set to True
+    if shuffle:
+        random.shuffle(data_index)
+    # Infinite loop for generating samples
+    while True:      
+        if index >= num_q:
+            # Reset the index
+            index = 0
+            if shuffle:
+                random.shuffle(data_index)  
+        q = qs[data_index[index]]
+        cur_batch.append(q.reshape(1, -1))
+        index += 1
+
+        # if enough sample, then export them and reset cur_batch tmp storage
+        if len(cur_batch) == batch_size:
+            yield torch.cat(cur_batch, axis=0)       
+            cur_batch = []
+
+# Fit AdjointNet (minimize |pT|)
+def fit_adjoint(q, env, times, adj_net, HDnet, optim_adj, stochastic, device):
+    zero_tensor = torch.zeros(q.shape[0], q.shape[1], dtype=torch.float, device=device)
+    criterion = torch.nn.SmoothL1Loss()
+    p = adj_net(q.to(device))
+    qp = torch.cat((q.to(device), p), axis=1)
+    if stochastic:
+        qps = sdeint(HDnet, qp, times)
+    else:
+        qps = odeint(HDnet, qp, times)
+ 
+    _, pt = torch.chunk(qps[-1], 2, axis=1)
+    if stochastic:
+        pt = torch.clip(pt, -MAX_VAL, MAX_VAL) # Clipping if things are stochastic
+    #nabla_qi = torch.tensor(env.nabla_g(qi.cpu().detach().numpy()), dtype=torch.float, device=device)
+    loss = criterion(pt, zero_tensor)
+    
+    optim_adj.zero_grad()
+    loss.backward()
+    for param in adj_net.parameters():
+        param.grad.data.clamp_(-1, 1)
+    optim_adj.step()
+
+    return loss
+
 def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
-                T_end=2.0, batch_size=64, lr=1e-3, log_interval=50):     
+                T_end=2.0, batch_size=64, lr=1e-3, log_interval=10,
+                num_adj_train_max=1000, stop_train_condition=0.001):     
     # Setup HDnet, adjoint_net and optimizers
     if stochastic:
         HDnet = HDStochasticNet(Hnet=hnet, sigma=sigma, device=device).to(device)
@@ -290,21 +318,24 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
     optim_adj.zero_grad()
     # Sample data qs for training adjoint net and times
     qs = torch.tensor(env.sample_q(num_episodes), dtype=torch.float)
+    generator = sample_generator(qs, batch_size)
     times = list(np.linspace(0, T_end, 2))
     times = torch.tensor(times, device=device, requires_grad=True)
     # Now train the adjoint net
     print('\nAdjoint net training...')
     HDnet.copy_params(hnet) # Copy parameters from hnet to hnet_target
     total_loss = 0
-    num_batch_adjoint = num_episodes//batch_size
-    for i in range(num_batch_adjoint):
-        loss_adj = fit_adjoint(qs[i*batch_size:(i+1)*batch_size], env, times, adj_net, HDnet, optim_adj, stochastic, device)
+    iter = 0; total_loss = 0
+    while iter < num_adj_train_max:
+        loss_adj = fit_adjoint(next(generator), env, times, adj_net, HDnet, optim_adj, stochastic, device)
         total_loss += loss_adj
-        if i % log_interval == 0:
-            print('\nIter {}: Average loss for adjoint network: {:.3f}'.format(i+1, total_loss))
-            #if i > LEAST_NUM_TRAIN * log_interval and (total_loss/log_interval) < stop_train_condition:
-            #    break
+        if iter % log_interval == 0:
+            print('\nIter {}: Average loss for reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            if iter > LEAST_NUM_TRAIN*log_interval and (total_loss/log_interval) < stop_train_condition:
+                break
             total_loss = 0
+        iter += 1
+
     print('\nDone adjoint net training.')
 
 # Temporary wait not train phase 2 yet  
@@ -378,7 +409,7 @@ def training(stochastic, sigma, device, env, env_name, adj_net, Hnet, Hnet_targe
     num_episodes_hnet=1024, T_hnet=5.0, n_timesteps=50, control_coef=0.5,
     batch_size_hnet_sample=256, batch_size_hnet=32, update_interval=10, rate=1, lr_hnet=1e-3, 
     num_hnet_train_max=1000000, log_interval_hnet=1000, stop_train_condition=0.001, retrain_hnet=True, 
-    num_episodes_adj=2048, T_adj=2.0, batch_size_adj=64, lr_adj=1e-3, log_interval_adj=1):
+    num_episodes_adj=2048, num_adj_train_max=1000, T_adj=2.0, batch_size_adj=64, lr_adj=1e-3, log_interval_adj=10):
     """
     PMP training procedure with different types of modes. Currently only focus on first phase training
     Args:
@@ -408,7 +439,8 @@ def training(stochastic, sigma, device, env, env_name, adj_net, Hnet, Hnet_targe
         print('\nLoaded reduced Hamiltonian net models.\n')
     # Train adjoint network adjoint_net
     train_adjoint(stochastic, sigma, device, env, num_episodes_adj, adj_net, Hnet,
-        T_end=T_adj, batch_size=batch_size_adj, lr=lr_adj, log_interval=log_interval_adj)
+        T_end=T_adj, batch_size=batch_size_adj, lr=lr_adj, log_interval=log_interval_adj,
+        num_adj_train_max=num_adj_train_max, stop_train_condition=stop_train_condition)
     
     torch.save(adj_net.state_dict(), 'models/' + env_name + '/adjoint.pth')
 
