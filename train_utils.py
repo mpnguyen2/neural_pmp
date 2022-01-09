@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import torch
-from torchdiffeq import odeint_adjoint as odeint
+from torchdiffeq import odeint, odeint_adjoint
 from torchsde import sdeint
 
 from common.common_nets import Mlp, Encoder
@@ -152,23 +152,23 @@ def sample_step(q, p, env, HDnet, times, memory, control_coef, stochastic, devic
             qps = sdeint(HDnet, qp, times)
         else:
             qps = odeint(HDnet, qp, times)
-        # Go over each time-datapoint in the trajectory to update replay memory
-        for i in range(qps.shape[0]):
-            qpi_np = qps[i].cpu().detach().numpy()
-            qi_np, pi_np = np.split(qpi_np, 2, axis=1)
-            # Clipping if things are stochastic
-            if stochastic:
-                qi_np, pi_np = np.clip(qi_np, -MAX_VAL, MAX_VAL), np.clip(pi_np, -MAX_VAL, MAX_VAL)
-            # Calculate u based on PMP condition H_u = 0
-            u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(qi_np), -pi_np)
-            # Store info into a tuple for replay memory
-            dynamic = env.f(qi_np, u); reward = env.L(qi_np, u)
-            for j in range(qi_np.shape[0]):
-                memory.push(torch.tensor(qi_np[j:(j+1), :], dtype=torch.float, device=device), 
-                    torch.tensor(pi_np[j:(j+1), :], dtype=torch.float, device=device), 
-                    torch.tensor(u[j:(j+1), :], dtype=torch.float, device=device), 
-                    torch.tensor(dynamic[j:(j+1), :], dtype=torch.float, device=device), 
-                    torch.tensor(reward[j:(j+1)], dtype=torch.float, device=device))
+    # Go over each time-datapoint in the trajectory to update replay memory
+    for i in range(qps.shape[0]):
+        qpi_np = qps[i].cpu().detach().numpy()
+        qi_np, pi_np = np.split(qpi_np, 2, axis=1)
+        # Clipping if things are stochastic
+        if stochastic:
+            qi_np, pi_np = np.clip(qi_np, -MAX_VAL, MAX_VAL), np.clip(pi_np, -MAX_VAL, MAX_VAL)
+        # Calculate u based on PMP condition H_u = 0
+        u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(qi_np), -pi_np)
+        # Store info into a tuple for replay memory
+        dynamic = env.f(qi_np, u); reward = env.L(qi_np, u)
+        for j in range(qi_np.shape[0]):
+            memory.push(torch.tensor(qi_np[j:(j+1), :], dtype=torch.float, device=device), 
+                torch.tensor(pi_np[j:(j+1), :], dtype=torch.float, device=device), 
+                torch.tensor(u[j:(j+1), :], dtype=torch.float, device=device), 
+                torch.tensor(dynamic[j:(j+1), :], dtype=torch.float, device=device), 
+                torch.tensor(reward[j:(j+1)], dtype=torch.float, device=device))
 
 # Take (batch of) samples from replay memory and update reduced hamiltonian net (Use Huber instead of L2 loss)
 def fit_hnet(memory, hnet, optim_hnet, batch_size):
@@ -210,6 +210,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet
         HDnet = HDNet(Hnet=hnet_target).to(device)
     # Optimizers for Hnet and AdjointNet
     optim_hnet = torch.optim.Adam(hnet.parameters(), lr=lr)
+    #optim_hnet = torch.optim.SGD(hnet.parameters(), lr=lr, momentum=.9, nesterov=True)
     optim_hnet.zero_grad()
     # Times at which we sample data-points for each trajectory
     times = list(np.linspace(0, T_end + 1e-5, n_timesteps))
@@ -291,7 +292,7 @@ def fit_adjoint(q, env, times, adj_net, HDnet, optim_adj, stochastic, device):
     if stochastic:
         qps = sdeint(HDnet, qp, times)
     else:
-        qps = odeint(HDnet, qp, times, method='rk4', options={'step_size': 0.1})
+        qps = odeint_adjoint(HDnet, qp, times, method='rk4', options={'step_size': 0.1})
  
     _, pt = torch.chunk(qps[-1], 2, axis=1)
     if stochastic:
@@ -407,7 +408,7 @@ def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder
         
         return np.array(q_samples)
     
-def training(stochastic, sigma, device, env, env_name, adj_net, Hnet, Hnet_target,
+def training(stochastic, sigma, device, env, env_name, adj_net, hnet, hnet_target, load_model=False,
     num_episodes_hnet=1024, T_hnet=5.0, n_timesteps=50, control_coef=0.5,
     batch_size_hnet_sample=256, batch_size_hnet=32, update_interval=10, rate=1, lr_hnet=1e-3, 
     num_hnet_train_max=1000000, log_interval_hnet=1000, stop_train_condition=0.001, retrain_hnet=True, train_adj=True,
@@ -427,21 +428,27 @@ def training(stochastic, sigma, device, env, env_name, adj_net, Hnet, Hnet_targe
 
     start_time = time.time()
     print('\nBegin training...')
+    # load the models from files if needed
+    if load_model:
+        hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
+        adj_net.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
+        print('Loaded Hamiltonian net and adjoint net from files')
+
     # Train reduced Hamiltonian network Hnet
     if retrain_hnet:
-        train_hnet(stochastic, sigma, device, env, num_episodes_hnet, adj_net, Hnet, Hnet_target, 
+        train_hnet(stochastic, sigma, device, env, num_episodes_hnet, adj_net, hnet, hnet_target, 
             T_end=T_hnet, n_timesteps=n_timesteps, control_coef=control_coef, use_adj_net=False, 
             update_interval=update_interval, rate=rate, mem_capacity=10000, batch_size_sample=batch_size_hnet_sample, 
             batch_size=batch_size_hnet, num_hnet_train_max=num_hnet_train_max, stop_train_condition=stop_train_condition, 
             lr=lr_hnet, log_interval=log_interval_hnet)
 
-        torch.save(Hnet.state_dict(), 'models/' + env_name + '/hamiltonian_dynamics.pth')
+        torch.save(hnet.state_dict(), 'models/' + env_name + '/hamiltonian_dynamics.pth')
     else:
-        Hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
+        hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
         print('\nLoaded reduced Hamiltonian net models.\n')
     # Train adjoint network adjoint_net
     if train_adj:
-        train_adjoint(stochastic, sigma, device, env, num_episodes_adj, adj_net, Hnet,
+        train_adjoint(stochastic, sigma, device, env, num_episodes_adj, adj_net, hnet,
             T_end=T_adj, batch_size=batch_size_adj, lr=lr_adj, log_interval=log_interval_adj,
             num_adj_train_max=num_adj_train_max, stop_train_condition=stop_train_condition)
         torch.save(adj_net.state_dict(), 'models/' + env_name + '/adjoint.pth')
