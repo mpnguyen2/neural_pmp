@@ -1,13 +1,13 @@
-import argparse
+import argparse, time
 import numpy as np
 import cv2 
 
 import torch
 from torchdiffeq import odeint_adjoint as odeint
 
-from common.common_nets import Mlp
+#from common.common_nets import Mlp
 from model_nets import HDNet
-from envs.classical_controls import MountainCar, Pendulum, CartPole
+#from envs.classical_controls import MountainCar, Pendulum, CartPole
 from envs.density_optimization import DensityOpt
 
 from train_utils import get_environment, get_architectures
@@ -22,18 +22,22 @@ def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir
     HDnet = HDNet(Hnet=hnet).to(device)
     if use_adj:
         adj_net.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
+        adj_net = adj_net.to(device)
     # Sample state
     q = torch.tensor(env.sample_q(1, mode='test'), dtype=torch.float, device=device)
+    print('\nInitial cost: {:.3f}.'.format(env.g(q.cpu().detach().numpy())[0]))
     nabla_s = env.nabla_g(q.cpu().detach().numpy())
     # Finding appropriate adjoint variable either by adjoint network
     # or by searching randomly over the one give the best terminal state given the fixed and trained hamiltonian dynamics
     if use_adj:
         p = adj_net(q)
+        #print(p.cpu().detach().numpy())
     else:
-        num_trials = 1000
+        start_time = time.time()
+        num_trials = 500
         q_dup = torch.cat([q for _ in range(num_trials)])
         ps = torch.rand(num_trials, q.shape[1], dtype=torch.float, device=device) - .5 #AdjointNet(q)
-        max_ind = -1; min_val = 100
+        min_ind = -1; min_val = 1e9
         test_times = list(np.linspace(0, T, 2))
         test_times = torch.tensor(test_times, requires_grad=True, device=device)
         print('Looking for optimal starting adjoint...')
@@ -41,13 +45,21 @@ def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir
         with torch.no_grad():
             traj = odeint(HDnet, qp, test_times)
         print('Done running batch of testing adjoints p and duplicate of states q')
+        norms = []
         for i in range(num_trials):
-            qt, _ = torch.chunk(traj[-1, i:(i+1)], 2, dim=1)
+            qt, pt = torch.chunk(traj[-1, i:(i+1)], 2, dim=1)
+            #cost = np.sum(pt.cpu().detach().numpy()**2)
+            #print(cost)
             cost = env.g(qt.cpu().detach().numpy())[0]
+            norms.append(np.sum(pt.cpu().detach().numpy()**2))
             if cost < min_val:
-                max_ind = i
+                min_ind = i
                 min_val = cost
-        p = ps[max_ind:(max_ind+1)]
+        p = ps[min_ind:(min_ind+1)]
+        print('Finding optimal p takes {:.4f} seconds.'.format(time.time()-start_time))
+        norms = np.array(norms)
+        #print(norms[min_ind])
+        #print(np.min(norms), np.max(norms), np.sort(norms)[:10])
 
     print('Done finding optimal starting adjoint. Finding optimal trajectory...')
 
@@ -61,6 +73,8 @@ def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir
     print('Done finding trajectory...')
     # Then save states on the trajectory to qs
     qs = np.zeros((len(traj), q.shape[1]))
+    print(log_interval)
+
     for e in traj:
         qe, _ = torch.chunk(e, 2, dim=1)
         qe_np = qe.cpu().detach().numpy()
@@ -70,8 +84,9 @@ def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir
             cost = env.g(qe_np)[0]
             #total_energy += env.get_energy(qe_np, pe_np)
             print('step {}: terminal cost {:.3f}'.format(cnt+1, cost))
-            if cost < eps:
-                break
+            #print('q:', qe.reshape(-1)[0])
+            #if cost < eps:
+                #break
         cnt += 1
     # Print numerical information
     nabla_t = env.nabla_g(qs[-1:])

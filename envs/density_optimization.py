@@ -15,9 +15,8 @@ ImgDim = namedtuple('ImgDim', 'width height')
 # Shape optimization for boundary parametrization method
 class DensityOptBoundary(ContinuousEnv):
     def __init__(self, q_dim=16, u_dim=16, control_coef=0.5):
-        super().__init__(q_dim, u_dim)
+        super().__init__(q_dim, u_dim, control_coef)
         self.num_coef = q_dim//2
-        self.control_coef = control_coef
         self.ts = np.linspace(0, 1, 80)
         
     # qdot = u. Shape is controlled solely by its adjustable velocity u
@@ -26,10 +25,6 @@ class DensityOptBoundary(ContinuousEnv):
     
     def f_u(self, q):
         return np.array([np.eye(q.shape[1])]*q.shape[0])
-    
-    # Lagrangian or running cost L
-    def L(self, q, u):
-        return self.control_coef*np.sum(u**2, axis=1) + self.g(q)
     
     # Terminal cost g
     def g(self, q):
@@ -113,8 +108,8 @@ class DensityOptBoundary(ContinuousEnv):
 
 # Shape optimization for level-set method
 class DensityOpt(ContinuousEnv):
-    def __init__(self, q_dim=16, u_dim=16):
-        super().__init__(q_dim, u_dim)
+    def __init__(self, q_dim=16, u_dim=16, control_coef=0.5):
+        super().__init__(q_dim, u_dim, control_coef)
         self.xk, self.yk = np.mgrid[-1:1:4j, -1:1:4j]
         self.xg, self.yg = np.mgrid[-1:1:50j, -1:1:50j]
         self.viewer = ImgDim(width=self.xg.shape[0], height=self.yg.shape[1])
@@ -125,10 +120,6 @@ class DensityOpt(ContinuousEnv):
     
     def f_u(self, q):
         return np.array([np.eye(q.shape[1])]*q.shape[0])
-    
-    # Lagrangian or running cost L
-    def L(self, q, u):
-        return -0.1*np.sum(u**2, axis=1) - self.g(q)
     
     # Terminal cost g
     def g(self, q):
