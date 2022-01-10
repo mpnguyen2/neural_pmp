@@ -37,8 +37,7 @@ def train_env(env_name, stochastic=False, sigma=1, device=device_default,
     lr_adj = lr_adj_custom if lr_change else lr_adj
     
     #Print hyperparameters info
-    print(f'\nGeneral info for training hyperparameters:')
-    print(f'Device: {device}')
+    print(f'\nDevice: {device}')
     if retrain_hnet:
         print('\nHamiltonian training:')
         print(f'total number of episodes: {num_episodes_hnet}, max number of iterations: {num_hnet_train_max}.')

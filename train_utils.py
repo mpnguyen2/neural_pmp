@@ -209,8 +209,8 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet
     else:
         HDnet = HDNet(Hnet=hnet_target).to(device)
     # Optimizers for Hnet and AdjointNet
-    optim_hnet = torch.optim.Adam(hnet.parameters(), lr=lr)
-    #optim_hnet = torch.optim.SGD(hnet.parameters(), lr=lr, momentum=.9, nesterov=True)
+    #optim_hnet = torch.optim.Adam(hnet.parameters(), lr=lr)
+    optim_hnet = torch.optim.SGD(hnet.parameters(), lr=lr, momentum=.9, nesterov=False)
     optim_hnet.zero_grad()
     # Times at which we sample data-points for each trajectory
     times = list(np.linspace(0, T_end + 1e-5, n_timesteps))
