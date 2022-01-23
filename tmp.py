@@ -170,3 +170,73 @@ qi_dot_np = qi_dot.detach().numpy()
 # Calculate reference reduced Hamiltonian using usual Hamiltonian but with supposedly optimal control
 h_pq_ref = np.einsum('ik,ik->i', pi_np, qi_dot_np) + env.L(qi_np, u)
 '''
+
+'''
+# Temporary wait not train phase 2 yet  
+def train_phase_2(AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder, qs, 
+                  T2 = 1.0, beta = 1.0, 
+                  batch_size=32, num_epoch=20, lr=1e-3, 
+                  log_interval=50, env_name=''):
+    
+    HDVAE_net = HDVAE(AdjointNet, Hnet, HnetDecoder, z_encoder, z_decoder, T2)
+    # Optimizer for Hamiltonian net decoder, (additional) latent encoder and decoder
+    optim = torch.optim.Adam(list(HnetDecoder.parameters()) + 
+                             list(z_encoder.parameters()) +
+                             list(z_decoder.parameters()), lr=lr)
+    optim.zero_grad()
+    
+    # Training over the same data qs num_epoch epochs
+    num_samples = qs.shape[0]
+    for i in range(num_epoch):
+        print('\nEpoch {}: '.format(i+1))
+        loss = 0
+        q_dat = torch.clone(qs)[torch.randperm(num_samples)]
+        num_iter = q_dat.shape[0]//batch_size
+        total_loss = 0
+        for j in range(num_iter):
+            # state training examples
+            q = q_dat[j*batch_size:(j+1)*batch_size]
+            # Hamiltonian VAE net returns starting coupled state (state+adjoint)
+            # terminal coupled state and its construction, starting state construction
+            # mean and logvar of the actual latent variable mapped from terminal state 
+            qp, qp_hat, qpt, qpt_hat, mu, logvar = HDVAE_net(q)
+            # Reconstruction loss
+            loss = torch.sum((qp-qp_hat)**2) + torch.sum((qpt-qpt_hat)**2) # + KL based on mu logvar
+            # KL loss
+            loss += beta * kl_loss(mu, logvar)
+            # Optim step
+            loss.backward()
+            optim.step(); optim.zero_grad()
+            # Print progress
+            total_loss += loss.item()
+            if j % log_interval == 0:
+                print('Average loss for {}th iteration is: {}'.format(j+1, total_loss/((j+1)*batch_size)))
+    
+def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder, 
+                        qs, T=1, num_samples_per_seed=50):
+    HDnet = HDNet(Hnet=Hnet)
+    q_dim = env.q_dim
+    #seed_z = []
+    q_samples = []
+    with torch.no_grad():
+        for q in qs:
+            q = q.reshape(1, -1)
+            p = AdjointNet(q)
+            qp = torch.cat((q, p), axis=1)
+            times = []
+            s = 0.0; max_num_step=200
+            for i in range(max_num_step):
+                times.append(s)
+                s += 0.5
+            qp_traj = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))
+            for i in range(max_num_step-1):
+                if env.criteria_q(qp_traj[i].detach().numpy()[0, :q_dim])\
+                       < env.criteria_q(qp_traj[i+1].detach().numpy()[0, :q_dim]):
+                           seed_qp = qp_traj[i]
+                           q_samples.append(seed_qp.detach().numpy()[0, :q_dim])
+                           #seed_z.append(z_encoder(seed_qp))
+                           break
+        
+        return np.array(q_samples)
+
+'''

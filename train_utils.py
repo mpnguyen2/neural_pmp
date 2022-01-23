@@ -43,7 +43,7 @@ def get_environment(env_name, control_coef=0.5):
         return TestEnv(control_coef=control_coef)
     
 # Get architecture
-def get_architectures(arch_file, env_name, phase2=False):
+def get_architectures(arch_file, env_name, activation='tanh', phase2=False):
     # Get architecture info from arch_file
     df = pd.read_csv(arch_file)
     info = df[df['env_name']==env_name]
@@ -59,9 +59,9 @@ def get_architectures(arch_file, env_name, phase2=False):
         z_encoder_logvar_layer_dims = toList(info['z_encoder_logvar_layer_dims'].values[0])
         z_decoder_layer_dims = toList(info['z_decoder_layer_dims'].values[0])
     # Build adjoint variable and Hamiltonian nets
-    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=adj_net_layer_dims, activation='relu')
-    hnet = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_layer_dims)
-    hnet_target = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_layer_dims)
+    adj_net = Mlp(input_dim=q_dim, output_dim=q_dim, layer_dims=adj_net_layer_dims, activation=activation)
+    hnet = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_layer_dims, activation=activation)
+    hnet_target = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_layer_dims, activation=activation)
     if phase2:
         # Build hnet_decoder
         hnet_decoder = Mlp(input_dim=2*q_dim, output_dim=1, layer_dims=hnet_decoder_layer_dims)
@@ -98,26 +98,14 @@ def get_test_params(param_file, env_name):
 
 ## Saving models ##
 # save model phase 1
-def save_models_phase1(adj_net, hnet, env_name):
+def save_models(adj_net, hnet, env_name):
     torch.save(adj_net.state_dict(), 'models/' + env_name + '/adjoint.pth')
     torch.save(hnet.state_dict(), 'models/' + env_name + '/hamiltonian_dynamics.pth')
 
 # load model phase 1
-def load_models_phase1(adj_net, hnet, env_name):
+def load_models(adj_net, hnet, env_name):
     adj_net.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
     hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
-    
-# save model phase 2
-def save_models_phase2(HnetDecoder, z_encoder, z_decoder, env_name):
-    torch.save(HnetDecoder.state_dict(), 'models/' + env_name + '/hamiltonian_decoder.pth')
-    torch.save(z_encoder.state_dict(), 'models/' + env_name + '/z_encoder.pth')
-    torch.save(z_decoder.state_dict(), 'models/' + env_name + '/z_decoder.pth')
-    
-# load model phase 1
-def load_models_phase2(HnetDecoder, z_encoder, z_decoder, env_name):
-    HnetDecoder.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_decoder.pth'))
-    z_encoder.load_state_dict(torch.load('models/' + env_name + '/z_encoder.pth'))
-    z_decoder.load_state_dict(torch.load('models/' + env_name + '/z_decoder.pth'))
     
 ## Helper loss fct ##
 # kl_loss btw Gaussian posterior distribution Q(z|X)=N(mu, logvar) and prior Gaussian distribution P(z)
@@ -132,9 +120,12 @@ class ReplayMemory(object):
 
     def __init__(self, capacity):
         self.memory = deque([],maxlen=capacity)
+        self.capacity = capacity
 
     def push(self, *args):
         """Save a transition"""
+        if len(self.memory) == self.capacity:
+            random.shuffle(self.memory)
         self.memory.append(Data(*args))
 
     def sample(self, batch_size):
@@ -195,9 +186,9 @@ def fit_hnet(memory, hnet, optim_hnet, batch_size):
 
     return loss
 
-def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet_target, 
+def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hnet, hnet_target, 
                 T_end=5.0, n_timesteps=50, control_coef=0.5, use_adj_net=False, 
-                update_interval=10, rate=1, mem_capacity=10000, batch_size_sample=256, batch_size=32, 
+                update_interval=10, rate=1, batch_size_sample=256, batch_size=32, 
                 num_hnet_train_max=1000000, stop_train_condition=0.001, lr=1e-3, log_interval=1000):
         # Load to device (GPU)
     if use_adj_net: 
@@ -215,11 +206,8 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet
     # Times at which we sample data-points for each trajectory
     times = list(np.linspace(0, T_end + 1e-5, n_timesteps))
     times = torch.tensor(times, device=device, requires_grad=False)
-    # replay memory
-    memory = ReplayMemory(capacity=mem_capacity)
-    # qs are starting states of trajectory and cnt is the number of qs used
+    # qs are starting states of trajectory
     print('\nSampling while optimizing Hamiltonian net...')
-    #qs = torch.tensor(env.sample_q(num_episodes), dtype=torch.float)
     num_batch_samples = num_episodes//batch_size_sample
     iter = 0; total_loss = 0; cnt = 0
     while cnt < num_batch_samples:
@@ -229,7 +217,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, adj_net, hnet, hnet
             # Sample trajectories
             q = torch.tensor(env.sample_q(batch_size_sample), dtype=torch.float) #qs[cnt*batch_size_sample:(cnt+1)*batch_size_sample,:]
             if use_adj_net:
-                p = adj_net(q)
+                p = adj_net(q.to(device)).cpu()
             else:
                 p = torch.rand(q.shape, dtype=torch.float)-0.5
             sample_step(q, p, env, HDnet, times, memory, control_coef, stochastic, device)
@@ -284,7 +272,7 @@ def sample_generator(qs, batch_size, shuffle=True):
             cur_batch = []
 
 # Fit AdjointNet (minimize |pT|)
-def fit_adjoint(q, env, times, adj_net, HDnet, optim_adj, stochastic, device):
+def fit_adjoint(q, times, adj_net, HDnet, optim_adj, stochastic, device):
     zero_tensor = torch.zeros(q.shape[0], q.shape[1], dtype=torch.float, device=device)
     criterion = torch.nn.SmoothL1Loss()
     p = adj_net(q.to(device))
@@ -330,7 +318,7 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
     total_loss = 0
     iter = 0; total_loss = 0
     while iter < num_adj_train_max:
-        loss_adj = fit_adjoint(next(generator), env, times, adj_net, HDnet, optim_adj, stochastic, device)
+        loss_adj = fit_adjoint(next(generator), times, adj_net, HDnet, optim_adj, stochastic, device)
         total_loss += loss_adj
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for the adjoint network: {:.3f}'.format(iter+1, total_loss/log_interval))
@@ -340,90 +328,38 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
         iter += 1
 
     print('\nDone adjoint net training.')
-
-# Temporary wait not train phase 2 yet  
-def train_phase_2(AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder, qs, 
-                  T2 = 1.0, beta = 1.0, 
-                  batch_size=32, num_epoch=20, lr=1e-3, 
-                  log_interval=50, env_name=''):
     
-    HDVAE_net = HDVAE(AdjointNet, Hnet, HnetDecoder, z_encoder, z_decoder, T2)
-    # Optimizer for Hamiltonian net decoder, (additional) latent encoder and decoder
-    optim = torch.optim.Adam(list(HnetDecoder.parameters()) + 
-                             list(z_encoder.parameters()) +
-                             list(z_decoder.parameters()), lr=lr)
-    optim.zero_grad()
-    
-    # Training over the same data qs num_epoch epochs
-    num_samples = qs.shape[0]
-    for i in range(num_epoch):
-        print('\nEpoch {}: '.format(i+1))
-        loss = 0
-        q_dat = torch.clone(qs)[torch.randperm(num_samples)]
-        num_iter = q_dat.shape[0]//batch_size
-        total_loss = 0
-        for j in range(num_iter):
-            # state training examples
-            q = q_dat[j*batch_size:(j+1)*batch_size]
-            # Hamiltonian VAE net returns starting coupled state (state+adjoint)
-            # terminal coupled state and its construction, starting state construction
-            # mean and logvar of the actual latent variable mapped from terminal state 
-            qp, qp_hat, qpt, qpt_hat, mu, logvar = HDVAE_net(q)
-            # Reconstruction loss
-            loss = torch.sum((qp-qp_hat)**2) + torch.sum((qpt-qpt_hat)**2) # + KL based on mu logvar
-            # KL loss
-            loss += beta * kl_loss(mu, logvar)
-            # Optim step
-            loss.backward()
-            optim.step(); optim.zero_grad()
-            # Print progress
-            total_loss += loss.item()
-            if j % log_interval == 0:
-                print('Average loss for {}th iteration is: {}'.format(j+1, total_loss/((j+1)*batch_size)))
-    
-def get_extreme_samples(env, AdjointNet, Hnet, HnetDecoder, z_decoder, z_encoder, 
-                        qs, T=1, num_samples_per_seed=50):
-    HDnet = HDNet(Hnet=Hnet)
-    q_dim = env.q_dim
-    #seed_z = []
-    q_samples = []
-    with torch.no_grad():
-        for q in qs:
-            q = q.reshape(1, -1)
-            p = AdjointNet(q)
-            qp = torch.cat((q, p), axis=1)
-            times = []
-            s = 0.0; max_num_step=200
-            for i in range(max_num_step):
-                times.append(s)
-                s += 0.5
-            qp_traj = odeint(HDnet, qp, torch.tensor(times, requires_grad=True))
-            for i in range(max_num_step-1):
-                if env.criteria_q(qp_traj[i].detach().numpy()[0, :q_dim])\
-                       < env.criteria_q(qp_traj[i+1].detach().numpy()[0, :q_dim]):
-                           seed_qp = qp_traj[i]
-                           q_samples.append(seed_qp.detach().numpy()[0, :q_dim])
-                           #seed_z.append(z_encoder(seed_qp))
-                           break
-        
-        return np.array(q_samples)
-    
-def training(stochastic, sigma, device, env, env_name, adj_net, hnet, hnet_target, load_model=False,
-    num_episodes_hnet=1024, T_hnet=5.0, n_timesteps=50, control_coef=0.5,
-    batch_size_hnet_sample=256, batch_size_hnet=32, update_interval=10, rate=1, lr_hnet=1e-3, 
-    num_hnet_train_max=1000000, log_interval_hnet=1000, stop_train_condition=0.001, retrain_hnet=True, train_adj=True,
-    num_episodes_adj=2048, num_adj_train_max=1000, T_adj=2.0, batch_size_adj=64, lr_adj=1e-3, log_interval_adj=100):
+def training(stochastic, sigma, device, env, env_name, 
+    adj_net, hnet, hnet_target, 
+    num_train=10, num_warmup=10, load_model=False,
+    T_hnet=5.0, T_adj=2.0, n_timesteps=50, control_coef=0.5,
+    num_episodes_hnet=1024, num_episodes_adj=2048, 
+    update_interval=10, rate=1, 
+    batch_size_hnet_sample=256, batch_size_hnet=32, batch_size_adj=64,  
+    lr_hnet=1e-3, lr_adj=1e-3, log_interval_hnet=1000, log_interval_adj=100,
+    num_hnet_train_max=1000000, num_adj_train_max=1000, stop_train_condition=0.001,
+    mem_capacity=1000000):
     """
     PMP training procedure with different types of modes. Currently only focus on first phase training
     Args:
-        adj_net, Hnet: networks to be traineed
-        T_hnet, T_adj: terminal times for adj_net and Hnet
+        stochastic, sigma: Whether to use stochastic dynamical system
+        device: GPU or CPU
+        env, env_name: environment
+        adj_net, hnet, hnet_target: networks to be traineed
+        warmup: whether to do warm up phase or not
+        load_model: Whether to load model to continue to train on this one
+        num_train: Number of training phases after warmup phase
+        T_hnet, T_adj: terminal times for adj_net and hnet
+        n_timesteps: Number of time steps in the trajectory
         control_coef: coefficient c of control term cu^2 in the Lagrangian l(q, u) = cu^2 + l1(q)
-        batch_size: batch size for Hamiltonian net training
-        num_episodes: Number of trajectories to be sampled
+        num_episodes_hnet, num_episodes_adj: Number of episodes to be sampled for training hnet and adj_net in each phase
+        update_interval: Number of times hnet is minimized per sample step
+        rate: the rate at which update_interval is increased
+        batch_size_hnet_sample, batch_size_hnet, batch_size_adj: batch sizes for sampling and training
         lr_hnet, lr_adj: learning rates for Hnet and AdjointNet trainings
-        update_interval: When to update target hamiltonian net
-        log_interval: Record training losses interval
+        log_interval_hnet, log_interval_adj: Record training losses interval
+        num_hnet_train_max, num_adj_train_max: 
+        stop_train_condition: loss fct condition to stop training
     """
 
     start_time = time.time()
@@ -434,23 +370,34 @@ def training(stochastic, sigma, device, env, env_name, adj_net, hnet, hnet_targe
         adj_net.load_state_dict(torch.load('models/' + env_name + '/adjoint.pth'))
         print('Loaded Hamiltonian net and adjoint net from files')
 
-    # Train reduced Hamiltonian network Hnet
-    if retrain_hnet:
-        train_hnet(stochastic, sigma, device, env, num_episodes_hnet, adj_net, hnet, hnet_target, 
+    # Initalize replay memory
+    memory = ReplayMemory(capacity=mem_capacity)
+
+    print('\nWarm up training...')
+    # Warm up step: first train hnet and then adj net
+    for i in range(num_warmup):
+        print(f'\nWarm up phase {i}:')
+        train_hnet(stochastic, sigma, device, env, num_episodes_hnet, memory, adj_net, hnet, hnet_target, 
             T_end=T_hnet, n_timesteps=n_timesteps, control_coef=control_coef, use_adj_net=False, 
-            update_interval=update_interval, rate=rate, mem_capacity=10000, batch_size_sample=batch_size_hnet_sample, 
+            update_interval=update_interval, rate=rate, batch_size_sample=batch_size_hnet_sample, 
             batch_size=batch_size_hnet, num_hnet_train_max=num_hnet_train_max, stop_train_condition=stop_train_condition, 
             lr=lr_hnet, log_interval=log_interval_hnet)
-
-        torch.save(hnet.state_dict(), 'models/' + env_name + '/hamiltonian_dynamics.pth')
-    else:
-        hnet.load_state_dict(torch.load('models/' + env_name + '/hamiltonian_dynamics.pth'))
-        print('\nLoaded reduced Hamiltonian net models.\n')
-    # Train adjoint network adjoint_net
-    if train_adj:
         train_adjoint(stochastic, sigma, device, env, num_episodes_adj, adj_net, hnet,
             T_end=T_adj, batch_size=batch_size_adj, lr=lr_adj, log_interval=log_interval_adj,
             num_adj_train_max=num_adj_train_max, stop_train_condition=stop_train_condition)
-        torch.save(adj_net.state_dict(), 'models/' + env_name + '/adjoint.pth')
+
+    print(f'\nDone warmup training. Main training for {num_train} steps')
+    for i in range(num_train):
+        print(f'\nMain phase {i}:')
+        train_hnet(stochastic, sigma, device, env, num_episodes_hnet, memory, adj_net, hnet, hnet_target, 
+            T_end=T_hnet, n_timesteps=n_timesteps, control_coef=control_coef, use_adj_net=True, 
+            update_interval=update_interval, rate=1, batch_size_sample=batch_size_hnet_sample, 
+            batch_size=batch_size_hnet, num_hnet_train_max=num_hnet_train_max, stop_train_condition=stop_train_condition, 
+            lr=lr_hnet, log_interval=log_interval_hnet)
+        train_adjoint(stochastic, sigma, device, env, num_episodes_adj, adj_net, hnet,
+            T_end=T_adj, batch_size=batch_size_adj, lr=lr_adj, log_interval=log_interval_adj,
+            num_adj_train_max=num_adj_train_max, stop_train_condition=stop_train_condition)
+
+    save_models(adj_net, hnet, env_name)
 
     print('\nDone training. Training time is {:.4f} minutes'.format((time.time()-start_time)/60))

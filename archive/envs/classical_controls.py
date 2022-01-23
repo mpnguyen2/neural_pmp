@@ -8,10 +8,9 @@ from os import path
 
 ### Generic continuous environment for reduced Hamiltonian dynamics framework
 class ContinuousEnv():
-    def __init__(self, q_dim=1, u_dim=1, control_coef=0.5):
+    def __init__(self, q_dim=1, u_dim=1):
         self.q_dim = q_dim
         self.u_dim = u_dim
-        self.control_coef = control_coef
         self.eps = 1e-8
         self.id = np.eye(q_dim)
         self.seed()
@@ -33,7 +32,7 @@ class ContinuousEnv():
     
     # Lagrangian or running cost L
     def L(self, q, u):
-        return self.control_coef*np.sum(u**2, axis=1) + self.g(q)
+        return np.zeros(q.shape[0])
     
     # Terminal cost g
     def g(self, q):
@@ -62,8 +61,8 @@ class ContinuousEnv():
    
 #### Mountain car for PMP ####
 class MountainCar(ContinuousEnv):
-    def __init__(self, q_dim=2, u_dim=1, control_coef=0.5, goal_velocity=0):
-        super().__init__(q_dim, u_dim, control_coef)
+    def __init__(self, q_dim=2, u_dim=1, goal_velocity=0):
+        super().__init__(q_dim, u_dim)
         self.min_action = -1.0
         self.max_action = 1.0
         self.min_position = -1.2
@@ -86,34 +85,25 @@ class MountainCar(ContinuousEnv):
         return np.concatenate((np.zeros((N, 1, 1)), np.ones((N, 1, 1))*self.power), axis=1)
     
     def L(self, q, u):
-        return self.control_coef*(u[:, 0]**2) + self.g(q)
-    
+        return 0.5*(u[:, 0]**2)
+
     def g(self, q):
-        return np.maximum(0, self.goal_velocity-q[:, 1]) + np.maximum(0, self.goal_position-q[:, 0])
+        return (self.goal_position-q[:, 0])**2 + (self.goal_velocity-q[:, 1])**2
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train': 
-            a = 0.5
-        else:
             a = 1
-        return np.concatenate(
-            (a*np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
-            np.zeros((num_examples, 1))),
+        else:
+            a = 0.1
+        return a*np.concatenate(
+            (np.random.uniform(high=self.max_position, low=self.min_position, size=(num_examples, 1)),
+            np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
             axis=1)
-    
-    def criteria_q(self, q):
-        return (self.goal_position-q[0])**2
     
     def _height(self, xs):
         return np.sin(3 * xs) * 0.45 + 0.55
     
     def render(self, q, mode="rgb_array"):
-        # Set position and velocity boundary
-        if q[0] >= self.goal_position:
-            q[0] = self.goal_position
-        if q[1] >= self.goal_velocity:
-            q[1] = self.goal_velocity
-            
         screen_width = 600
         screen_height = 400
 
@@ -177,8 +167,8 @@ class MountainCar(ContinuousEnv):
 
 #### CartPole for PMP ####
 class CartPole(ContinuousEnv):
-    def __init__(self, q_dim=4, u_dim=1, control_coef=0.5):
-        super().__init__(q_dim, u_dim, control_coef)
+    def __init__(self, q_dim=4, u_dim=1):
+        super().__init__(q_dim, u_dim)
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -221,7 +211,7 @@ class CartPole(ContinuousEnv):
         
         
     def L(self, q, u):
-        return self.control_coef*(u**2) - q[:, 1]**2
+        return 0.5*(u**2) + q[:, 1]**2
     
     def g(self, q):
         #noise = np.random.normal(scale=0.001, size=(q.shape[0]))
@@ -302,8 +292,8 @@ def angle_normalize(x):
 
 #### Pendulum for PMP ####
 class Pendulum(ContinuousEnv):
-    def __init__(self, q_dim=2, u_dim=1, control_coef=0.5, gravity=9.8):
-        super().__init__(q_dim, u_dim, control_coef)
+    def __init__(self, q_dim=2, u_dim=1, gravity=9.8):
+        super().__init__(q_dim, u_dim)
         self.max_speed = 8
         self.max_torque = 2.0
         self.gravity = gravity
@@ -324,7 +314,7 @@ class Pendulum(ContinuousEnv):
     
     def L(self, q, u):
         u = np.clip(u, -self.max_torque, self.max_torque)
-        return self.control_coef*u[:, 0]**2 + self.g(q)
+        return u[:, 0]**2 + self.g(q)
     
     def g(self, q):
         return (angle_normalize(q[:, 0])+np.pi/2)**2
@@ -362,29 +352,3 @@ class Pendulum(ContinuousEnv):
         self.pole_transform.set_rotation(q[0]+np.pi/2)
 
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
-
-
-class TestEnv(ContinuousEnv):
-    def __init__(self, q_dim=1, u_dim=1, control_coef=0.5):
-        super().__init__(q_dim, u_dim, control_coef)
-        # Viewer for rendering image
-        #self.viewer = None
-    
-    # Dynamics f
-    def f(self, q, u):
-        return 2*(1-u)
-    
-    # Partial derivative of dynamics f wrt control u. Assuming linear control
-    def f_u(self, q):
-        return -2*np.ones((q.shape[0], self.q_dim, self.u_dim))
-    
-    # Terminal cost g
-    def g(self, q):
-        return -q.reshape(q.shape[0])
-    
-    # Sampling state q
-    def sample_q(self, num_examples, mode='train'):
-        if mode == 'train':
-            scaling = 1
-            return scaling*(np.random.rand(num_examples, self.q_dim)-0.5)
-        return np.ones((num_examples, self.q_dim))
