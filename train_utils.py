@@ -172,6 +172,7 @@ def fit_hnet(memory, hnet, optim_hnet, batch_size):
     f = torch.cat(batch.f)
     r = torch.cat(batch.r)
     qp = torch.cat((q, p), axis=1)
+
     # Compute Huber loss between reduced Hamiltonian and expected reduced Hamiltonian(instead of L1-loss)
     h_predict = hnet(qp).reshape(-1)
     h_expected =  (torch.einsum('ik,ik->i', p, f) + r)

@@ -221,7 +221,7 @@ class CartPole(ContinuousEnv):
         
         
     def L(self, q, u):
-        return self.control_coef*(u**2) - q[:, 1]**2
+        return self.control_coef*(np.sum(u**2, axis=1)) - q[:, 1]**2
     
     def g(self, q):
         #noise = np.random.normal(scale=0.001, size=(q.shape[0]))
