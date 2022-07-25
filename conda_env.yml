@@ -1,0 +1,17 @@
+name: NeuralPMP
+channels:
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - numpy
+  - scipy
+  - pytorch
+  - torchvision
+  - cudatoolkit=10.2
+  - gym
+  - shapely
+  - pip:
+    - torchsde
+    - opencv-python
+    - torchdiffeq
