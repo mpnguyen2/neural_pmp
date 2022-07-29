@@ -44,6 +44,15 @@ def get_environment(env_name, control_coef=0.5):
     
 # Get architecture
 def get_architectures(arch_file, env_name, activation='tanh', phase2=False):
+    r"""
+    Gets the architecture info from arch_file provided. 
+
+    Args:
+        arch_file (str): Path to the architecture.csv file
+        env_name (str): Environment to train NeuralPMP on. Options: mountain car, pendulum, cartpole, shape_opt, shape_opt_boundary
+        activation (str ): Activation function
+        phase2 (bool): Build hydrogen bond net decoder, encoder, and latent z decoder (phase 2 of training)
+    """
     # Get architecture info from arch_file
     df = pd.read_csv(arch_file)
     info = df[df['env_name']==env_name]
@@ -340,12 +349,13 @@ def training(stochastic, sigma, device, env, env_name,
     lr_hnet=1e-3, lr_adj=1e-3, log_interval_hnet=1000, log_interval_adj=100,
     num_hnet_train_max=1000000, num_adj_train_max=1000, stop_train_condition=0.001,
     mem_capacity=1000000):
-    """
+    r"""
     PMP training procedure with different types of modes. Currently only focus on first phase training
     Args:
-        stochastic, sigma: Whether to use stochastic dynamical system
-        device: GPU or CPU
-        env, env_name: environment
+        stochastic, sigma (bool): Whether to use stochastic dynamical system
+        device (str): GPU or CPU
+        env (str): Environment
+        env_name (str): Used for saving and loading model 
         adj_net, hnet, hnet_target: networks to be traineed
         warmup: whether to do warm up phase or not
         load_model: Whether to load model to continue to train on this one
