@@ -164,6 +164,7 @@ def sample_step(q, p, env, HDnet, times, memory, control_coef, stochastic, devic
         u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(qi_np), -pi_np)
         # Store info into a tuple for replay memory
         dynamic = env.f(qi_np, u); reward = env.L(qi_np, u)
+        wandb.log({"Reward": float(np.mean(reward).item())})
         for j in range(qi_np.shape[0]):
             memory.push(torch.tensor(qi_np[j:(j+1), :], dtype=torch.float, device=device), 
                 torch.tensor(pi_np[j:(j+1), :], dtype=torch.float, device=device), 
@@ -240,7 +241,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hn
         total_loss += loss_h
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for (pretrained) reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
-            wandb.log({"Loss": total_loss/log_interval})
+            wandb.log({"HNet Loss": total_loss/log_interval})
             total_loss = 0
         iter += 1
     # Additional training for reduced Hamiltonian
@@ -251,7 +252,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hn
         total_loss += loss_h
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
-            wandb.log({"Loss": total_loss/log_interval})
+            wandb.log({"HNet Loss": total_loss/log_interval})
             if iter > LEAST_NUM_TRAIN*log_interval and (total_loss/log_interval) < stop_train_condition:
                 break
             total_loss = 0
@@ -337,7 +338,7 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
         total_loss += loss_adj
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for the adjoint network: {:.3f}'.format(iter+1, total_loss/log_interval))
-            wandb.log({"Loss": total_loss/log_interval})
+            wandb.log({"Adjoint Net Loss": total_loss/log_interval})
             if iter > LEAST_NUM_TRAIN*log_interval and (total_loss/log_interval) < stop_train_condition:
                 break
             total_loss = 0
