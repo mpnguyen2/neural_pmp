@@ -4,13 +4,16 @@ channels:
 dependencies:
   - python=3.8
   - pip
+  - cudatoolkit=10.2
   - numpy
   - scipy
-  - pytorch
-  - torchvision
-  - cudatoolkit=10.2
+  - pytorch=1.12
+  - torchvision=0.13.0
+  - torchaudio=0.12.0
   - gym
   - shapely
+  - ipykernel
+  - wandb
   - pip:
     - torchsde
     - opencv-python

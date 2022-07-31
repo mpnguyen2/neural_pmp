@@ -1,6 +1,7 @@
 import argparse, time
 import numpy as np
 import cv2 
+import wandb
 
 import torch
 from torchdiffeq import odeint_adjoint as odeint
@@ -84,6 +85,7 @@ def run_traj(env, adj_net, hnet, env_name, use_adj=False, use_hnet=True, out_dir
             cost = env.g(qe_np)[0]
             #total_energy += env.get_energy(qe_np, pe_np)
             print('step {}: terminal cost {:.3f}'.format(cnt+1, cost))
+            wandb.log({"Cost": cost})
             #print('q:', qe.reshape(-1)[0])
             #if cost < eps:
                 #break

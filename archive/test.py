@@ -1,5 +1,6 @@
 import numpy as np
 import cv2 
+import wandb
 
 import torch
 from torchdiffeq import odeint_adjoint as odeint
@@ -42,6 +43,7 @@ def run_traj(env, AdjointNet, Hnet, model_name, time_steps=list(np.arange(0, 1, 
             #print('Q:', qe.detach().numpy())
             # Print info
             print('terminal cost: {}'.format(env.g(qe_np)[0]))
+            wandb.log({"Terminal cost": env.g(qe_np)[0]})
             # Write rendering image
             out.write(env.render(qe_np.reshape(-1)))
         cnt += 1

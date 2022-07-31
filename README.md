@@ -19,6 +19,14 @@ To run the code, use the following command:
 bash run_train.sh
 ```
 
+## Wandb
+
+We use Wandb to track the progression of our models. To login to Wandb, use the command
+```
+wandb login
+```
+To find out more about Wandb, [click me](https://wandb.ai/quickstart/pytorch)
+
 ## Default Hyperparameters
 Training Env: Cartpole (deterministic version)
 ### Hamiltonian Network

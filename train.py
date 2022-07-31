@@ -2,11 +2,15 @@ import argparse
 import numpy as np
 import torch
 import pandas as pd
+import wandb
 
 from common.common_nets import Mlp, Encoder
 
 #from envs.classical_controls import MountainCar, Pendulum, CartPole
 #from envs.density_optimization import DensityOpt
+
+# Wandb Tracking
+wandb.init(project="NeuralPMP")
 
 from train_utils import training, get_environment, get_architectures, get_train_params
 

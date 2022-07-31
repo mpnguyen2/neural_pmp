@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import wandb
 
 from common.common_nets import Mlp, Encoder
 
@@ -7,6 +8,9 @@ from envs.classical_controls import MountainCar, Pendulum, CartPole
 from envs.density_optimization import DensityOpt
 
 from train_utils import train_phase_1, train_phase_2
+
+# Wandb Tracking
+wandb.init(project="NeuralPMP")
 
 ## Phase 1 training ##
 train_mt, train_cart, train_pendulum, train_density = False, False, True, False

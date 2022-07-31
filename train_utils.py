@@ -1,6 +1,7 @@
 from collections import namedtuple, deque
 import random
 import time
+import wandb
 
 import numpy as np
 import pandas as pd
@@ -204,6 +205,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hn
     if use_adj_net: 
         adj_net = adj_net.to(device); 
     hnet = hnet.to(device); hnet_target = hnet_target.to(device)
+    hnet.reset_noise()
     # HDnet calculate the Hamiltonian dynamics network given the Hamiltonian target network
     if stochastic:
         HDnet = HDStochasticNet(Hnet=hnet_target, sigma=sigma, device=device).to(device)
@@ -238,6 +240,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hn
         total_loss += loss_h
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for (pretrained) reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            wandb.log({"Loss": total_loss/log_interval})
             total_loss = 0
         iter += 1
     # Additional training for reduced Hamiltonian
@@ -248,6 +251,7 @@ def train_hnet(stochastic, sigma, device, env, num_episodes, memory, adj_net, hn
         total_loss += loss_h
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for reduced Hamiltonian network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            wandb.log({"Loss": total_loss/log_interval})
             if iter > LEAST_NUM_TRAIN*log_interval and (total_loss/log_interval) < stop_train_condition:
                 break
             total_loss = 0
@@ -315,6 +319,7 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
     else:
         HDnet = HDNet(Hnet=hnet).to(device)
     adj_net = adj_net.to(device)
+    adj_net.reset_noise()
     optim_adj = torch.optim.Adam(adj_net.parameters(), lr=lr)
     optim_adj.zero_grad()
     # Sample data qs for training adjoint net and times
@@ -332,6 +337,7 @@ def train_adjoint(stochastic, sigma, device, env, num_episodes, adj_net, hnet,
         total_loss += loss_adj
         if iter % log_interval == log_interval-1:
             print('\nIter {}: Average loss for the adjoint network: {:.3f}'.format(iter+1, total_loss/log_interval))
+            wandb.log({"Loss": total_loss/log_interval})
             if iter > LEAST_NUM_TRAIN*log_interval and (total_loss/log_interval) < stop_train_condition:
                 break
             total_loss = 0
