@@ -1,0 +1,40 @@
+{
+    "os": "Linux-5.10.16.3-microsoft-standard-WSL2-x86_64-with-glibc2.17",
+    "python": "3.8.13",
+    "heartbeatAt": "2022-08-03T19:26:35.719715",
+    "startedAt": "2022-08-03T19:26:34.411001",
+    "docker": null,
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "gpu_count": 1,
+    "cpu_count": 16,
+    "cuda": null,
+    "args": [
+        "shape_opt",
+        "--num_episodes_hnet",
+        "1024",
+        "--num_episodes_adj",
+        "256",
+        "--num_hnet_train_max",
+        "1000000",
+        "--num_adj_train_max",
+        "2000",
+        "--stop_train_condition",
+        "0.005",
+        "--num_train",
+        "0",
+        "--num_warmup",
+        "1"
+    ],
+    "state": "running",
+    "program": "train.py",
+    "codePath": "train.py",
+    "git": {
+        "remote": "https://github.com/mpnguyen2/neural_pmp.git",
+        "commit": "148829183d86cca34f2319c643a258fc97c670a9"
+    },
+    "email": "jeffreymo572@gmail.com",
+    "root": "/home/jeffreymo572/Current/neural_pmp",
+    "host": "DESKTOP-NUCQ9A9",
+    "username": "jeffreymo572",
+    "executable": "/home/jeffreymo572/anaconda3/envs/NeuralPMP/bin/python"
+}

@@ -164,7 +164,6 @@ def sample_step(q, p, env, HDnet, times, memory, control_coef, stochastic, devic
         u = (1.0/(2*control_coef))*np.einsum('ijk,ij->ik', env.f_u(qi_np), -pi_np)
         # Store info into a tuple for replay memory
         dynamic = env.f(qi_np, u); reward = env.L(qi_np, u)
-        wandb.log({"Reward": float(np.mean(reward).item())})
         for j in range(qi_np.shape[0]):
             memory.push(torch.tensor(qi_np[j:(j+1), :], dtype=torch.float, device=device), 
                 torch.tensor(pi_np[j:(j+1), :], dtype=torch.float, device=device), 

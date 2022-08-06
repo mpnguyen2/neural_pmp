@@ -2,6 +2,7 @@ import numpy as np
 
 import torch
 from torchdiffeq import odeint_adjoint as odeint
+import wandb
 
 from common.common_nets import Mlp
 from model_nets import HDNet, HDVAE
@@ -70,6 +71,7 @@ def train_phase_1(env, AdjointNet, Hnet, qs,
                 h_pq_ref = np.einsum('ik,ik->i', p_np, qdot_np) + env.L(q_np, u)
             else:
                 h_pq_ref = np.einsum('ik,ik->i', p_np, env.f(q_np, u)) + env.L(q_np, u)
+            wandb.log({"Runnnig Cost":env.L})
             #print('h_pq_ref', h_pq_ref.shape)
             h_pq = Hnet(qp)
             #print('h_pq', h_pq.shape)

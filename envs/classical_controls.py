@@ -388,3 +388,4 @@ class TestEnv(ContinuousEnv):
             scaling = 1
             return scaling*(np.random.rand(num_examples, self.q_dim)-0.5)
         return np.ones((num_examples, self.q_dim))
+

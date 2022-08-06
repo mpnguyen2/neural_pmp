@@ -10,7 +10,7 @@ from common.common_nets import Mlp, Encoder
 #from envs.density_optimization import DensityOpt
 
 # Wandb Tracking
-wandb.init(project="Neural PMP")
+wandb.init(project="NeuralPMP")
 
 from train_utils import training, get_environment, get_architectures, get_train_params
 
