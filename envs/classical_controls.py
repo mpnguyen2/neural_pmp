@@ -75,7 +75,7 @@ class MountainCar(ContinuousEnv):
         self.goal_velocity = goal_velocity
         self.power = 0.0015
     
-    # (q0, q1) = (position, velocity)
+    # q([np.array]) = (q0, q1) = (position, velocity)
     def f(self, q, u):
         force = np.clip(u, self.min_action, self.max_action)
         return np.concatenate((q[:, 1:], 
@@ -218,8 +218,8 @@ class CartPole(ContinuousEnv):
         thetaacc_u = thetaacc_u.reshape(-1, 1)
         return np.concatenate((np.zeros((N, 1)), xacc_u, np.zeros((N, 1)), thetaacc_u), axis=1)\
             .reshape(-1, self.q_dim, self.u_dim)
-        
-        
+
+
     def L(self, q, u):
         return self.control_coef*(np.sum(u**2, axis=1)) - q[:, 1]**2
     

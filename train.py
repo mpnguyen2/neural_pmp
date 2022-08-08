@@ -10,7 +10,9 @@ from common.common_nets import Mlp, Encoder
 #from envs.density_optimization import DensityOpt
 
 # Wandb Tracking
-wandb.init(project="NeuralPMP")
+wandb.init(project="NeuralPMP", config={"Env":"Shape_opt", "q_dim":16, "u_dim":16, "Adj Net Dim":[32, 32, 32], 
+        "HNet Dim":[64, 8], "HNet Decoder dim":[64, 8], "z dim":4, "z share encoder dim":[64], 
+        "z mean encoer dim":[16, 8], "z encoder log var dim":[16, 8], "z decoder dim":[8, 16, 64]})
 
 from train_utils import training, get_environment, get_architectures, get_train_params
 
