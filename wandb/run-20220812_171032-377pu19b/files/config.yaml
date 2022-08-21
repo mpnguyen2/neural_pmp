@@ -1,0 +1,72 @@
+wandb_version: 1
+
+Adj Net Dim:
+  desc: null
+  value:
+  - 32
+  - 32
+  - 32
+Env:
+  desc: null
+  value: Shape_opt
+HNet Decoder dim:
+  desc: null
+  value:
+  - 64
+  - 8
+HNet Dim:
+  desc: null
+  value:
+  - 64
+  - 8
+_wandb:
+  desc: null
+  value:
+    cli_version: 0.12.21
+    framework: torch
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    python_version: 3.8.13
+    start_time: 1660342232
+    t:
+      1:
+      - 1
+      - 55
+      2:
+      - 1
+      - 55
+      3:
+      - 16
+      4: 3.8.13
+      5: 0.12.21
+      8:
+      - 5
+q_dim:
+  desc: null
+  value: 16
+u_dim:
+  desc: null
+  value: 16
+z decoder dim:
+  desc: null
+  value:
+  - 8
+  - 16
+  - 64
+z dim:
+  desc: null
+  value: 4
+z encoder log var dim:
+  desc: null
+  value:
+  - 16
+  - 8
+z mean encoer dim:
+  desc: null
+  value:
+  - 16
+  - 8
+z share encoder dim:
+  desc: null
+  value:
+  - 64

@@ -14,6 +14,7 @@ from common.common_nets import Mlp, Encoder
 from model_nets import HDNet, HDStochasticNet, HDVAE, HDInverseNet
 from envs.classical_controls import MountainCar, CartPole, Pendulum, TestEnv
 from envs.density_optimization import DensityOpt, DensityOptBoundary
+from envs.mujoco_envs import Ant
 
 # Constant clipping value
 MAX_VAL = 10.0
@@ -40,6 +41,8 @@ def get_environment(env_name, control_coef=0.5):
         return DensityOpt(control_coef=control_coef)
     if env_name == 'shape_opt_boundary':
         return DensityOptBoundary(control_coef=control_coef)
+    if env_name == 'ant':
+        return Ant(control_coef=control_coef)
     if env_name == 'test_env':
         return TestEnv(control_coef=control_coef)
     
