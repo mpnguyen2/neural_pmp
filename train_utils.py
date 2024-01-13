@@ -7,7 +7,6 @@ from torchdiffeq import odeint_adjoint as odeint
 from common.common_nets import Mlp, Encoder
 from model_nets import HDNet, HDVAE, HDInverseNet
 from envs.classical_controls import MountainCar, CartPole, Pendulum
-from envs.density_optimization import DensityOpt
 
 ## Reading architecture and training parameters routines ##
 def toList(s):
@@ -25,8 +24,6 @@ def get_environment(env_name):
         return CartPole()
     if env_name == 'pendulum':
         return Pendulum()
-    if env_name == 'shape_opt':
-        return DensityOpt()
 
 # Get architecture
 def get_architectures(arch_file, env_name):

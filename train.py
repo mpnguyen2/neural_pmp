@@ -32,7 +32,7 @@ def train_env(env_name, num_examples, mode=0,
         num_additional_train=num_additional_train)
 
 
-train_mt, train_cart, train_pendulum, train_density = True, False, False, False
+train_mt, train_cart, train_pendulum = True, False, False
 
 if train_mt:
     train_env('mountain_car', num_examples=3200, mode=0, num_examples_phase3=0.05, 

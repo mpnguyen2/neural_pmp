@@ -2,4 +2,3 @@ env_name,time_end_test1,time_step_test1,time_end_test2,time_step_test2,video_log
 mountain_car,130,0.4,24,0.05,1,1
 cartpole,200,0.4,100,0.1,2,1
 pendulum,1000,0.1,10,0.1,1,1
-shape_opt,100,0.4,100,0.4,1,10

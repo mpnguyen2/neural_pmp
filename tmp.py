@@ -57,14 +57,3 @@ print('H net...')
 for param in h_net.parameters():
     print(param.data)
 '''
-
-import pandas as pd
-
-data = {'name': ['1a', '2b', '3c'],
-        'price': [[0, 1, 2], [2, 3, 5], [3, 6, 8]],
-        'isLocked':[True, False, False]}
-
-df = pd.DataFrame(data, columns=['name', 'price', 'isLocked'])
-df.to_csv('models/test_csv.csv', index=False, header=True)
-df1 = pd.read_csv('models/test_csv.csv')
-print(list(df1[df1['name']=='1a']['price'].values[0]))

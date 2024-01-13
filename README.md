@@ -12,9 +12,3 @@ A few examples in finite-dimensional setting:
 <p align="center">
 <img src="videos/gif/test_mountain_car.gif" width="300" height="200"/>
 </p>
-
-Infinite-dimensional case:
-* 2D density map:
-<p align="center">
-<img src="videos/gif/test_shape_opt.gif" width="300" height="300"/>
-</p>

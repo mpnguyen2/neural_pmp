@@ -12,8 +12,7 @@ from envs.density_optimization import DensityOpt
 from train_utils import get_environment, get_architectures
 
 def run_traj(env, AdjointNet, Hnet, HnetDecoder, env_name, time_steps=list(np.arange(0, 1, 0.1)),
-             out_video='videos/test.wmv', test_trained=True, phase2=False, log_interval=1, 
-             env_close=True, isColor=True):
+             out_video='videos/test.wmv', test_trained=True, phase2=False, log_interval=1, isColor=True):
     # Setup video writer
     fourcc = cv2.VideoWriter_fourcc(*'WMV1')
     out = cv2.VideoWriter(out_video, fourcc, 20.0, (env.viewer.width, env.viewer.height), isColor=isColor)
@@ -53,9 +52,7 @@ def run_traj(env, AdjointNet, Hnet, HnetDecoder, env_name, time_steps=list(np.ar
 
     # Release video
     out.release()
-    
-    if env_close and env_name != 'shape_opt':
-        env.close()
+    env.close()
     
 def next_state(q, AdjointNet, HDnet, time_step=1):
     p = AdjointNet(q)
@@ -75,10 +72,7 @@ def test(env_name, test_trained=True, phase2=False,
     # Initialize environment
     isColor = True
     env = get_environment(env_name) 
-    if env_name == 'shape_opt':
-        isColor = False
-    if env_name != 'shape_opt':
-        env.render(np.zeros(q_dim))
+    env.render(np.zeros(q_dim))
     # Initialize video path
     video_path = 'videos/test_'+ env_name +'.wmv'
     if not test_trained:
@@ -103,8 +97,6 @@ if test_cart:
     test('cartpole', time_steps=list(np.arange(0, 200, 0.4)), log_interval=2, test_trained=True)
 if test_pendulum:
     test('pendulum', time_steps=list(np.arange(0, 1000, 1.0)), log_interval=1, test_trained=True)
-if test_density:
-    test('shape_opt', time_steps=list(np.arange(0, 100, 0.4)), log_interval=1, test_trained=True)
     
 test_mt2, test_cart2, test_pendulum2, test_density2 = False, False, False, False
 if test_mt2:
@@ -113,6 +105,4 @@ if test_cart2:
     test('cartpole', time_steps=list(np.arange(0, 100, 0.1)), log_interval=1, test_trained=True, phase2=True)
 if test_pendulum2:
     test('pendulum', test_trained=True, phase2=True)
-if test_density2:
-    test('shape_opt', time_steps=list(np.arange(0, 100, 0.4)), log_interval=10, test_trained=True, phase2=True)
  
