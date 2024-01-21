@@ -7,12 +7,11 @@ from torchdiffeq import odeint_adjoint as odeint
 from common.common_nets import Mlp
 from model_nets import HDNet
 from envs.classical_controls import MountainCar, Pendulum, CartPole
-from envs.density_optimization import DensityOpt
-
 from train_utils import get_environment, get_architectures
 
 def run_traj(env, AdjointNet, Hnet, HnetDecoder, env_name, time_steps=list(np.arange(0, 1, 0.1)),
-             out_video='videos/test.wmv', test_trained=True, phase2=False, log_interval=1, isColor=True):
+             out_video='videos/test.wmv', test_trained=True, phase2=False, log_interval=1, 
+             env_close=True, isColor=True):
     # Setup video writer
     fourcc = cv2.VideoWriter_fourcc(*'WMV1')
     out = cv2.VideoWriter(out_video, fourcc, 20.0, (env.viewer.width, env.viewer.height), isColor=isColor)
@@ -52,7 +51,9 @@ def run_traj(env, AdjointNet, Hnet, HnetDecoder, env_name, time_steps=list(np.ar
 
     # Release video
     out.release()
-    env.close()
+    
+    if env_close and env_name != 'shape_opt':
+        env.close()
     
 def next_state(q, AdjointNet, HDnet, time_step=1):
     p = AdjointNet(q)
@@ -72,7 +73,10 @@ def test(env_name, test_trained=True, phase2=False,
     # Initialize environment
     isColor = True
     env = get_environment(env_name) 
-    env.render(np.zeros(q_dim))
+    if env_name == 'shape_opt':
+        isColor = False
+    if env_name != 'shape_opt':
+        env.render(np.zeros(q_dim))
     # Initialize video path
     video_path = 'videos/test_'+ env_name +'.wmv'
     if not test_trained:
@@ -90,19 +94,18 @@ def test(env_name, test_trained=True, phase2=False,
                  time_steps=time_steps, log_interval=log_interval,
                  out_video=video_path, isColor=isColor)
     
-test_mt, test_cart, test_pendulum, test_density = True, False, False, False
+test_mt, test_cart, test_pendulum = False, False, False
 if test_mt:
-    test('mountain_car', time_steps=list(np.arange(0, 200, 0.1)), log_interval=1, test_trained=True)
+    test('mountain_car', time_steps=list(np.arange(0, 200, 1.0)), log_interval=1, test_trained=True)
 if test_cart:
     test('cartpole', time_steps=list(np.arange(0, 200, 0.4)), log_interval=2, test_trained=True)
 if test_pendulum:
     test('pendulum', time_steps=list(np.arange(0, 1000, 1.0)), log_interval=1, test_trained=True)
     
-test_mt2, test_cart2, test_pendulum2, test_density2 = False, False, False, False
+test_mt2, test_cart2, test_pendulum2 = False, False, False
 if test_mt2:
     test('mountain_car', time_steps=list(np.arange(0, 2, 0.1)), log_interval=1, test_trained=True, phase2=True)
 if test_cart2:
     test('cartpole', time_steps=list(np.arange(0, 100, 0.1)), log_interval=1, test_trained=True, phase2=True)
 if test_pendulum2:
     test('pendulum', test_trained=True, phase2=True)
- 
