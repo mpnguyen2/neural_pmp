@@ -1,8 +1,8 @@
 ### Continuous version for Hamiltonian dynamics training of environments in OpenAI Gym classical controls
 ### The rendering part is the same as OpenAI Gym
-
 import numpy as np
 import math
+import gymnasium as gym
 from gym.utils import seeding
 from os import path
 
@@ -58,7 +58,8 @@ class ContinuousEnv():
         if self.viewer:
             self.viewer.close()
             self.viewer = None
-   
+
+
 #### Mountain car for PMP ####
 class MountainCar(ContinuousEnv):
     def __init__(self, q_dim=2, u_dim=1, goal_velocity=0):
@@ -73,6 +74,8 @@ class MountainCar(ContinuousEnv):
         )
         self.goal_velocity = goal_velocity
         self.power = 0.0015
+        self.screen_width = 600
+        self.screen_height = 400
     
     # (q0, q1) = (position, velocity)
     def f(self, q, u):
@@ -85,7 +88,7 @@ class MountainCar(ContinuousEnv):
         return np.concatenate((np.zeros((N, 1, 1)), np.ones((N, 1, 1))*self.power), axis=1)
     
     def L(self, q, u):
-        return 0.1*(u[:, 0]**2) + self.g(q)
+        return 0.1*np.sum(u**2) + self.g(q)
 
     def g(self, q):
         return (self.goal_velocity-q[:, 1])**2 + (self.goal_position-q[:, 0])**2
@@ -100,15 +103,15 @@ class MountainCar(ContinuousEnv):
             np.random.uniform(high=self.max_speed, low=-self.max_speed, size=(num_examples, 1))),
             axis=1)
     
-    def criteria_q(self, q):
-        return (self.goal_position-q[0])**2
+    def eval(self, q):
+        return (self.goal_position-q[:, 0])**2
     
     def _height(self, xs):
         return np.sin(3 * xs) * 0.45 + 0.55
     
     def render(self, q, mode="rgb_array"):
-        screen_width = 600
-        screen_height = 400
+        screen_width = self.screen_width
+        screen_height = self.screen_height
 
         world_width = self.max_position - self.min_position
         scale = screen_width / world_width
@@ -168,6 +171,7 @@ class MountainCar(ContinuousEnv):
 
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
 
+
 #### CartPole for PMP ####
 class CartPole(ContinuousEnv):
     def __init__(self, q_dim=4, u_dim=1):
@@ -182,7 +186,10 @@ class CartPole(ContinuousEnv):
     
         # For continous version
         self.theta_threshold_radians = 12 * 2 * math.pi / 360
-        self.x_threshold = 2.4   
+        self.x_threshold = 2.4
+
+        self.screen_width = 600
+        self.screen_height = 400 
         
     def f(self, q, u):
         _, x_dot, theta, theta_dot = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
@@ -214,13 +221,16 @@ class CartPole(ContinuousEnv):
         
         
     def L(self, q, u):
-        return -0.5*(u**2) - q[:, 1]**2
+        return 0.5*np.sum(u**2)
     
     def g(self, q):
         #noise = np.random.normal(scale=0.001, size=(q.shape[0]))
         #t = [self.x_threshold/2, self.theta_threshold_radians/2]
         #a = 0.005
         return (q[:, 2]/self.theta_threshold_radians)**2 #(a**2-q[:, 0]**2)
+    
+    def eval(self, q):
+        return (q[:, 2]/self.theta_threshold_radians)**2 
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train':
@@ -230,8 +240,8 @@ class CartPole(ContinuousEnv):
         return np.random.uniform(low=-a, high=a, size=(num_examples, 4))
     
     def render(self, q, mode="rgb_array"):
-        screen_width = 600
-        screen_height = 400
+        screen_width = self.screen_width
+        screen_height = self.screen_height
 
         world_width = self.x_threshold * 2
         scale = screen_width / world_width
@@ -293,6 +303,7 @@ class CartPole(ContinuousEnv):
 def angle_normalize(x):
     return ((x + np.pi) % (2 * np.pi)) - np.pi
 
+
 #### Pendulum for PMP ####
 class Pendulum(ContinuousEnv):
     def __init__(self, q_dim=2, u_dim=1, gravity=9.8):
@@ -302,6 +313,9 @@ class Pendulum(ContinuousEnv):
         self.gravity = gravity
         self.m = 1.0
         self.l = 1.0
+
+        self.screen_width = 500
+        self.screen_height = 500
     
     # (q0, q1) = (position, velocity)
     def f(self, q, u):
@@ -322,6 +336,9 @@ class Pendulum(ContinuousEnv):
     def g(self, q):
         return (angle_normalize(q[:, 0])+np.pi/2)**2
     
+    def eval(self, q):
+        return (angle_normalize(q[:, 0])+np.pi/2)**2
+    
     def sample_q(self, num_examples, mode='train'):
         if mode=='train':
             a = 0.1
@@ -333,10 +350,12 @@ class Pendulum(ContinuousEnv):
                 axis=1)
         
     def render(self, q, mode="rgb_array"):
+        screen_width = self.screen_width
+        screen_height = self.screen_height
+
         if self.viewer is None:
             from gym.envs.classic_control import rendering
-
-            self.viewer = rendering.Viewer(500, 500)
+            self.viewer = rendering.Viewer(screen_width, screen_height)
             self.viewer.set_bounds(-2.2, 2.2, -2.2, 2.2)
             rod = rendering.make_capsule(1, 0.2)
             rod.set_color(0.8, 0.3, 0.3)

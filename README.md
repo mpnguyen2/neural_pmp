@@ -1,14 +1,17 @@
-# Neural Pontryagin maximum principle
-Pontryagin maximum principle based learning framework with variational auto-encoder-like neural network architecture.
+# Neural Pontryagin maximum principle (NeuralPMP)
+Pontryagin maximum principle-based learning framework for optimal control problems with variational auto-encoder-like network architecture.
 
-A few examples in finite-dimensional setting:
 
 * Cartpole:
-<p align="center">
-<img src="videos/gif/test_cartpole.gif" width="300" height="200"/>
-</p>
+
+Untrained                  |  NeuralPMP
+:-------------------------:|:-------------------------:
+![](videos/gif/test_cartpole_untrained.gif)  |  ![](videos/gif/test_cartpole_phase2.gif)
+
+<br>
 
 * Mountain car:
-<p align="center">
-<img src="videos/gif/test_mountain_car.gif" width="300" height="200"/>
-</p>
+
+Untrained                  |  NeuralPMP
+:-------------------------:|:-------------------------:
+![](videos/gif/test_mountain_car_untrained.gif)  |  ![](videos/gif/test_mountain_car_phase2.gif)
