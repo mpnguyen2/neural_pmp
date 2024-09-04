@@ -4,6 +4,7 @@ from scipy import stats
 import pandas as pd
 import torch
 from envs.classical_controls import MountainCar, CartPole, Pendulum
+from envs.natural_processes import ProdAndConsume, BeeColony, BioReactor
 from common_nets import Mlp, Encoder
 
 def toList(s):
@@ -21,6 +22,12 @@ def get_environment(env_name):
         return CartPole()
     if env_name == 'pendulum':
         return Pendulum()
+    if env_name == 'prodconsume':
+        return ProdAndConsume()
+    if env_name == 'bee_colony':
+        return BeeColony()
+    if env_name == 'bio_reactor':
+        return BioReactor()
 
 # Get architecture
 def get_architectures(arch_file, env_name):
@@ -69,10 +76,12 @@ def get_train_params(param_file, env_name):
     # Get training details for second phase (batch_size, num_epoch, lr, log_interval)
     num_epoch2, num_iter2, batch_size2, lr2, log_interval2 = info['num_epoch2'].values[0], info['num_iter2'].values[0],\
         info['batch_size2'].values[0], info['lr2'].values[0], info['log_interval2'].values[0]
+    # Get checkpoint save frequency
+    log_save1, log_save2 = info['log_save1'].values[0], info['log_save2'].values[0]
 
     return T1, T2, control_coef, dynamic_hidden, alpha1, alpha2, beta1, beta2,\
-        num_epoch1, num_iter1, batch_size1, lr1, log_interval1,\
-        num_epoch2, num_iter2, batch_size2, lr2, log_interval2
+        num_epoch1, num_iter1, batch_size1, lr1, log_interval1,log_save1,\
+        num_epoch2, num_iter2, batch_size2, lr2, log_interval2,log_save2
 
 # save model phase 1
 def save_models_phase1(adj_net, hnet, env_name):
@@ -136,4 +145,13 @@ def plot_eval_benchmarks(eval_dict, time_steps, title, mode='bootstrap',
     ax.set_xlabel('Timestamp')
     ax.set_ylabel('Evaluation cost')
     plt.savefig('plots/' + plot_dir)
+    plt.show()
+
+def plot_trajs(final_costs, time_steps, title, plot_dir='tmp.png'):
+    for t in range(final_costs.shape[0]):
+        plt.plot(time_steps, final_costs[t])
+    plt.title(title)
+    plt.xlabel('Timestamp')
+    plt.ylabel('Evaluation cost')
+    # plt.savefig('plots/' + plot_dir)
     plt.show()

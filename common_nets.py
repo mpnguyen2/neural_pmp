@@ -13,7 +13,7 @@ class Mlp(nn.Module):
         layer_dims (List[int]): Dimensions of hidden layers
         activation (str): type of activations. Not applying to the last layer 
     """
-    def __init__(self, input_dim, output_dim, layer_dims=[], activation='tanh'):
+    def __init__(self, input_dim, output_dim, layer_dims=[], activation='relu', last_layer=False):
         super(Mlp, self).__init__()
         self.layers = []
         self.input_dim = input_dim
@@ -33,6 +33,8 @@ class Mlp(nn.Module):
             self.layers.append(nn.Linear(layer_dims[-1], output_dim))
         else:
             self.layers.append(nn.Linear(input_dim, output_dim))
+        if last_layer:
+            self.layers.append(nn.Sigmoid())
         # Composing all layers
         self.net = nn.Sequential(*self.layers)
     

@@ -1,4 +1,7 @@
-env_name,T1,T2,dynamic_hidden,control_coef,alpha1,alpha2,beta1,beta2,batch_size1,batch_size2,num_epoch1,num_epoch2,num_iter1,num_iter2,lr1,lr2,log_interval1,log_interval2
-mountain_car,1,1,FALSE,0.2,0.1,1,10,1,32,32,5,10,40,40,1.00E-03,1.00E-03,20,20
-cartpole,1,1,FALSE,1,0.1,1,10,1,32,32,5,10,100,100,1.00E-03,1.00E-03,20,20
-pendulum,1,1,FALSE,1,0.1,1,10,1,32,32,5,10,40,40,1.00E-03,1.00E-03,20,20
+env_name,T1,T2,dynamic_hidden,control_coef,alpha1,alpha2,beta1,beta2,batch_size1,batch_size2,num_epoch1,num_epoch2,num_iter1,num_iter2,lr1,lr2,log_interval1,log_interval2,log_save1,log_save2
+mountain_car,1,1,FALSE,0.2,0.1,1,10,1,32,32,5,10,40,40,1.00E-03,1.00E-03,20,20,5,5
+cartpole,1,1,FALSE,1,0.1,1,10,1,32,32,5,10,100,100,1.00E-03,1.00E-03,20,20,5,5
+pendulum,1,1,FALSE,1,0.1,1,10,1,32,32,5,10,40,40,1.00E-03,1.00E-03,20,20,5,5
+prodconsume,1,1,FALSE,1,0.1,1,10,1,16,16,50,200,200,40,1.00E-03,1.00E-03,50,50,5,5
+bee_colony,1,1,FALSE,1,0.1,1,10,1,16,16,200,50,200,40,1.00E-03,1.00E-03,50,50,5,5
+bio_reactor,1,1,FALSE,1,0.1,1,10,1,16,16,200,50,200,40,1.00E-03,1.00E-03,50,50,5,5

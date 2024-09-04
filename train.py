@@ -45,11 +45,11 @@ def kl_loss(mu, logvar):
     return torch.mean(-0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1), dim=0)
 
 # Train phase 1
-def train_phase_1(env, adj_net, hnet, qs, 
+def train_phase_1(env, env_name, adj_net, hnet, qs, 
                   T1=1.0, control_coef=0.5, dynamic_hidden=False, 
                   alpha1=1, alpha2=0.1, beta=1, 
                   num_epoch=20, num_iter=20, batch_size=32, lr=1e-3, 
-                  log_interval=50):
+                  log_interval=50, log_save=5):
     # HDnet calculate the Hamiltonian dynamics network given the Hamiltonian network Hnet
     hd_net = HDNet(hnet=hnet)
     # Optimizer for HDnet
@@ -65,9 +65,10 @@ def train_phase_1(env, adj_net, hnet, qs,
         loss = 0; cnt = 0
         q_dat = torch.clone(qs)[torch.randperm(num_samples)]
         total_loss = 0
+        num_iter = num_samples // batch_size
         for j in range(num_iter):
             # state training examples
-            q = q_dat[np.random.choice(num_samples, batch_size, replace=False)] #[j*batch_size:(j+1)*batch_size]
+            q = q_dat[j*batch_size:(j+1)*batch_size] #[np.random.choice(num_samples, batch_size, replace=False)]
             q_np = q.detach().numpy()
             #print('q', q.shape)
             # adjoint and generalized coordinates qp = (q, p)
@@ -93,17 +94,19 @@ def train_phase_1(env, adj_net, hnet, qs,
 
             ## Second part of loss function: beta1 * (h(q, p) - ((p, f(q, u)) + L(q, u)))
             # Calculate optimal u = -p^T f_u(q, u) (based on adjoint)
+            #print(q_np.shape, p_np.shape)
             u = (1.0/control_coef)*np.einsum('ijk,ij->ik', env.f_u(q_np), -p_np)
             #print('u', u.shape)
             if dynamic_hidden:
                 # (p, f(q, u)) + L(q, u) = (p, qdot_np) + L(q, u)
                 qp_dot = hd_net(0, qp)
                 qdot, _ = torch.chunk(qp_dot, 2, dim=1)
-                #print('qdot, pdot', qdot.shape, pdot.shape)
+                #print('qdot', qdot.shape)
                 qdot_np = qdot.detach().numpy()
                 # Calculate reference reduced Hamiltonian using usual Hamiltonian but with supposedly optimal control
                 h_pq_ref = np.einsum('ik,ik->i', p_np, qdot_np) + env.L(q_np, u)
             else:
+                #print(p_np.shape, env.f(q_np, u).shape, env.L(q_np, u).shape)
                 h_pq_ref = np.einsum('ik,ik->i', p_np, env.f(q_np, u)) + env.L(q_np, u)
             #print('h_pq_ref', h_pq_ref.shape)
             h_pq = hnet(qp)
@@ -121,9 +124,13 @@ def train_phase_1(env, adj_net, hnet, qs,
                 total_loss = 0
                 cnt = 0
 
+        # Save checkpoint
+        if (i+1) % log_save == 0:
+            utils.save_models_phase1(adj_net, hnet, env_name)
+
 # Train phase 2
-def train_phase_2(adj_net, hnet, hnet_decoder, z_decoder, z_encoder, qs, T2=1.0, beta=1.0, 
-                  num_epoch=20, num_iter=20, batch_size=32, lr=1e-3, log_interval=50):
+def train_phase_2(env_name, adj_net, hnet, hnet_decoder, z_decoder, z_encoder, qs, T2=1.0, beta=1.0, 
+                  num_epoch=20, num_iter=20, batch_size=32, lr=1e-3, log_interval=50, log_save=5):
     
     hd_vae_net = HDVAE(adj_net, hnet, hnet_decoder, z_encoder, z_decoder, T2)
     # Optimizer for Hamiltonian net decoder, (additional) latent encoder and decoder
@@ -139,9 +146,10 @@ def train_phase_2(adj_net, hnet, hnet_decoder, z_decoder, z_encoder, qs, T2=1.0,
         loss = 0; cnt = 0
         q_dat = torch.clone(qs)[torch.randperm(num_samples)]
         total_loss = 0
+        num_iter = num_samples // batch_size
         for j in range(num_iter):
             # state training examples
-            q = q_dat[np.random.choice(num_samples, batch_size, replace=False)] #[j*batch_size:(j+1)*batch_size]
+            q = q_dat[j*batch_size:(j+1)*batch_size] #[np.random.choice(num_samples, batch_size, replace=False)]
             # Hamiltonian VAE net returns starting coupled state (state+adjoint)
             # terminal coupled state and its construction, starting state construction
             # mean and logvar of the actual latent variable mapped from terminal state 
@@ -162,6 +170,10 @@ def train_phase_2(adj_net, hnet, hnet_decoder, z_decoder, z_encoder, qs, T2=1.0,
                 total_loss = 0
                 cnt = 0
 
+        # Save checkpoint
+        if (i+1) % log_save == 0:
+            utils.save_models_phase2(hnet_decoder, z_encoder, z_decoder, env_name)
+
 # Main training including phase 1 and phase 2 sequentially
 def main_training(env, env_name, qs, 
     adj_net, hnet, hnet_decoder, z_decoder, z_encoder, 
@@ -170,6 +182,7 @@ def main_training(env, env_name, qs,
     num_epoch1=20, num_epoch2=20, num_iter1=20, num_iter2=20,
     batch_size1=32, batch_size2=32, lr1=1e-3, lr2=1e-3,
     log_interval1=50, log_interval2=50,
+    log_save1=5, log_save2=5,
     mode=0, retrain_phase1=True, retrain_phase2=True,
     num_examples_phase2=0.2, num_additional_train=5):
     """
@@ -192,9 +205,10 @@ def main_training(env, env_name, qs,
     # Train phase 1 only for deterministic Hamiltonian. NeuralPMP-phase1
     if retrain_phase1:
         print('\nTraining phase 1...')
-        train_phase_1(env, adj_net, hnet, qs, 
+        train_phase_1(env, env_name, adj_net, hnet, qs, 
             T1, control_coef, dynamic_hidden, alpha1, alpha2, beta1,
-            num_epoch1, num_iter1, batch_size1, lr1, log_interval1)
+            num_epoch1, num_iter1, batch_size1, lr1,
+            log_interval1, log_save1)
     else:
         utils.load_models_phase1(adj_net, hnet, env_name)
         print('\nLoaded phase 1 trained models (adjoint net and Hamiltonian net).\n')
@@ -205,8 +219,10 @@ def main_training(env, env_name, qs,
             print('\nTraining phase 2...')
             num_examples = int(num_examples_phase2*qs.shape[0])
             qs2 = torch.clone(qs)[torch.randperm(qs.shape[0])][:num_examples]
-            train_phase_2(adj_net, hnet, hnet_decoder, z_decoder, z_encoder, qs2, 
-                      T2, beta2, num_epoch2, num_iter2, batch_size2, lr2, log_interval2)
+            train_phase_2(env_name, adj_net, hnet, hnet_decoder,
+                          z_decoder, z_encoder, qs2, T2, beta2,
+                          num_epoch2, num_iter2, batch_size2, lr2,
+                          log_interval2, log_save2)
         else:
             utils.load_models_phase2(hnet_decoder, z_encoder, z_decoder, env_name)
             print('\nLoaded phase 2 trained models (Hamiltonian decoder and latent encoder and decoder).\n')
@@ -221,13 +237,15 @@ def main_training(env, env_name, qs,
         for i in range(num_additional_train):
             print(f'\nRetraining phase 1 with new data {i}th time...')
             # Training using extreme data
-            train_phase_1(env, adj_net, hnet, qs_extreme, 
+            train_phase_1(env, env_name, adj_net, hnet, qs_extreme, 
                 T1, control_coef, dynamic_hidden, alpha1, alpha2, beta1,
-                num_epoch1, num_iter1, batch_size1, lr1, log_interval1)
+                num_epoch1, num_iter1, batch_size1, lr1,
+                log_interval1, log_save1)
             # Training using usual data
-            train_phase_1(env, adj_net, hnet, qs, 
+            train_phase_1(env, env_name, adj_net, hnet, qs, 
                 T1, control_coef, dynamic_hidden, alpha1, alpha2, beta1,
-                num_epoch1, num_iter1, batch_size1, lr1, log_interval1)
+                num_epoch1, num_iter1, batch_size1, lr1,
+                log_interval1, log_save1)
 
     # Save models
     print('\nDone training. Saving model...')
@@ -245,8 +263,8 @@ def train(env_name, num_examples, mode=0,
     env = utils.get_environment(env_name)
     _, adj_net, hnet, hnet_decoder, z_encoder, z_decoder = utils.get_architectures(arch_file, env_name)
     T1, T2, control_coef, dynamic_hidden, alpha1, alpha2, beta1, beta2, \
-        num_epoch1, num_iter1, batch_size1, lr1, log_interval1,\
-        num_epoch2, num_iter2, batch_size2, lr2, log_interval2 = utils.get_train_params(param_file, env_name)
+        num_epoch1, num_iter1, batch_size1, lr1, log_interval1, log_save1,\
+        num_epoch2, num_iter2, batch_size2, lr2, log_interval2, log_save2 = utils.get_train_params(param_file, env_name)
     T1, T2 = float(T1), float(T2)
 
     # Starting point samples
@@ -257,7 +275,9 @@ def train(env_name, num_examples, mode=0,
         adj_net, hnet, hnet_decoder, z_decoder, z_encoder, 
         T1=T1, T2=T2, control_coef=control_coef, dynamic_hidden=dynamic_hidden,
         alpha1=alpha1, alpha2=alpha2, beta1=beta1, beta2=beta2,
-        num_epoch1=num_epoch1, num_iter1=num_iter1, batch_size1=batch_size1, lr1=lr1, log_interval1=log_interval1, 
-        num_epoch2=num_epoch2, num_iter2=num_iter2, batch_size2=batch_size2, lr2=lr2, log_interval2=log_interval2,
+        num_epoch1=num_epoch1, num_iter1=num_iter1, batch_size1=batch_size1,
+        lr1=lr1, log_interval1=log_interval1, log_save1=log_save1,
+        num_epoch2=num_epoch2, num_iter2=num_iter2, batch_size2=batch_size2,
+        lr2=lr2, log_interval2=log_interval2, log_save2=log_save2,
         mode=mode, retrain_phase1=retrain_phase1, retrain_phase2=retrain_phase2,
         num_examples_phase2=num_examples_phase2, num_additional_train=num_additional_train)
