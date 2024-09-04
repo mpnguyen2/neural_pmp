@@ -86,7 +86,9 @@ def _test(env_name, num_trajs, time_steps, test_trained, phase2, total_random=Fa
 
 def benchmarks(env_name, num_trajs, time_steps,
                eval_along_traj=False,
-               plot_traj=False):
+               plot_traj=False,
+               y_label='value',
+               y_label_traj='functional'):
     # Calculate result
     final_costs_total_random = _test(env_name, num_trajs, time_steps, test_trained=False,
                                      phase2=False, total_random=True)
@@ -103,6 +105,7 @@ def benchmarks(env_name, num_trajs, time_steps,
     }
     utils.plot_eval_benchmarks(eval_dict, time_steps,
                                title='Benchmarkings on ' + env_name,
+                               y_label=y_label,
                                plot_dir=env_name + '_benchmarks_plot.png')
 
     # Report statistics
@@ -118,11 +121,22 @@ def benchmarks(env_name, num_trajs, time_steps,
     # Evaluate along trajectory
     if eval_along_traj:
         env = utils.get_environment(env_name)
+        eval_traj_dict = {
+            'Random': env.eval_all(final_costs_total_random),
+            'Random Hamiltonian': env.eval_all(final_costs_untrained),
+            'NeuralPMP-phase 1': env.eval_all(final_costs_phase_1),
+            'NeuralPMP': env.eval_all(final_costs_phase_2)
+        }
+        
         print('\nEvaluation along trajectories:')
-        print('Random:', env.eval_all(-final_costs_total_random))
-        print('Random Hamiltonian:', env.eval_all(-final_costs_untrained))
-        print('NeuralPMP-phase 1:', env.eval_all(-final_costs_phase_1))
-        print('NeuralPMP:', env.eval_all(-final_costs_phase_2))
+        print('Random:', np.mean(eval_traj_dict['Random']))
+        print('Random Hamiltonian:', np.mean(eval_traj_dict['Random Hamiltonian']))
+        print('NeuralPMP-phase 1:', np.mean(eval_traj_dict['NeuralPMP-phase 1']))
+        print('NeuralPMP:', np.mean(eval_traj_dict['NeuralPMP']))
+        utils.plot_eval_traj_benchmarks(eval_traj_dict,
+                               title='Benchmarkings on ' + env_name,
+                               plot_dir=env_name + '_functional_benchmarks_plot.png',
+                               y_label=y_label_traj)
     
     # Plot trajectories
     if plot_traj:

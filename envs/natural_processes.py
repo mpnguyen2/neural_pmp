@@ -25,11 +25,11 @@ class ProdAndConsume(ContinuousEnv):
         return np.zeros(q.shape[0]) #-q.reshape(-1)
     
     def eval(self, q):
-        return -q.reshape(-1)
+        return q.reshape(-1)
     
     def eval_all(self, q_all):
         u = (q_all[:, 1:] - q_all[:, :-1])/(q_all[:, :-1]*self.k)
-        return np.sum((1-u)*q_all[:, :-1])
+        return np.sum((1-u)*q_all[:, :-1], axis=1)
     
     def sample_q(self, num_examples, mode='train'):
         return self.x0*(1 + np.random.uniform(high=1, low=-1, size=(num_examples, 1)))
@@ -37,7 +37,7 @@ class ProdAndConsume(ContinuousEnv):
 class BeeColony(ContinuousEnv):
     def __init__(self, q_dim=2, u_dim=1,
                  d1=0.2, d2=0.3, b1=2.0, b2=1.0,
-                 w0=10, qu0=0.5):
+                 w0=10, qu0=0.4):
         super().__init__(q_dim, u_dim)
         self.screen_width = 500
         self.screen_height = 500
@@ -47,27 +47,28 @@ class BeeColony(ContinuousEnv):
     
     # (q0, q1) = (position, velocity)
     def f(self, q, u):
-        w = q[:, 0]
-        qu = q[:, 1]
+        u = np.clip(u, 0, 1)
+        w = np.clip(q[:, 0], 0, None)
+        qu = np.clip(q[:, 1], 0, None)
         w_dot = -self.d1*w + self.b1*u[:,0]*w
         qu_dot = -self.d2*qu + self.b2*(1-u[:,0])*w
         return np.array([w_dot, qu_dot]).swapaxes(0, 1)
         
     def f_u(self, q):
-        w = q[:, 0]
+        w = np.clip(q[:, 0], 0, None)
         c1 = self.b1*w
         c2 = -self.b2*w
         val = np.array([c1, c2]).swapaxes(0, 1)
         return val.reshape(-1, 2, 1)
     
     def L(self, q, u):
-        return np.zeros(q.shape[0])  + 1000 * ((u > 1).reshape(-1).astype(float) + (u < 0).reshape(-1).astype(float))
+        return 1-q[:, 1]
     
     def g(self, q):
-        return -q[:, 1]
+        return 1-q[:, 1]
     
     def eval(self, q):
-        return -q[:, 1]
+        return q[:, 1]
     
     def sample_q(self, num_examples, mode='train'):
         if mode == 'train':

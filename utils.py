@@ -132,6 +132,7 @@ def _tsplot(ax, x, data, mode='bootstrap', **kw):
 
 def plot_eval_benchmarks(eval_dict, time_steps, title, mode='bootstrap', 
                          colors=['red', 'blue', 'green', 'orange'],
+                         y_label = 'Evaluation_cost',
                          plot_dir='tmp.png'):
     methods = list(eval_dict.keys())
     ax = plt.gca()
@@ -143,7 +144,26 @@ def plot_eval_benchmarks(eval_dict, time_steps, title, mode='bootstrap',
     ax.legend(graphic_list, methods)
     ax.set_title(title)
     ax.set_xlabel('Timestamp')
-    ax.set_ylabel('Evaluation cost')
+    ax.set_ylabel(y_label)
+    plt.savefig('plots/' + plot_dir)
+    plt.show()
+
+def plot_eval_traj_benchmarks(eval_traj_dict, title,
+                         colors=['red', 'blue', 'green', 'orange'],
+                         y_label = 'Evaluation_cost',
+                         plot_dir='tmp.png'):
+    methods = list(eval_traj_dict.keys())
+    ax = plt.gca()
+    graphic_list = []
+    for i, method in enumerate(methods):
+        data = eval_traj_dict[method]
+        traj_numbers = np.arange(data.shape[0])
+        p2 = ax.scatter(traj_numbers, data, c=colors[i])
+        graphic_list.append(p2)
+    ax.legend(graphic_list, methods)
+    ax.set_title(title)
+    ax.set_xlabel('Trajectory number')
+    ax.set_ylabel(y_label)
     plt.savefig('plots/' + plot_dir)
     plt.show()
 
